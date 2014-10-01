@@ -16,7 +16,7 @@ import java.util.regex.Pattern;
  */
 public class ExtractSnpChrPosFromUcscDbsnpTable {
 	
-	private static final Pattern TAB_PATTERN = Pattern.compile("\t");
+	private static final Pattern TAB_PATTERN = Pattern.compile("\\t");
 	private static final Pattern CHR_PATTERN = Pattern.compile("^chr(.*)$", Pattern.CASE_INSENSITIVE);
 	
 	public static void main(String[] args) throws Exception {
@@ -51,17 +51,24 @@ public class ExtractSnpChrPosFromUcscDbsnpTable {
 		
 		BufferedReader dbSnpReader = new BufferedReader(new InputStreamReader(new FileInputStream(dbSnpFile), "UTF-8"));
 		while ((line = dbSnpReader.readLine()) != null) {
+			if(line.charAt(0) == '#'){
+				continue;
+			}
 			String[] elements = TAB_PATTERN.split(line);
-			String rs = elements[4];
+			if(elements.length < 3){
+				System.err.println("Error skipping line: " + line);
+				continue;
+			}
+			String rs = elements[2];
 			
 			if(rsIdsToQuery.contains(rs)){
 				rsIdsToQuery.remove(rs);
 				
 				outputWriter.append(rs);
 				outputWriter.append('\t');
-				outputWriter.append(removeChr(elements[1]));
+				outputWriter.append(removeChr(elements[0]));
 				outputWriter.append('\t');
-				outputWriter.append(elements[3]);
+				outputWriter.append(elements[1]);
 				outputWriter.append('\n');
 			}
 			
