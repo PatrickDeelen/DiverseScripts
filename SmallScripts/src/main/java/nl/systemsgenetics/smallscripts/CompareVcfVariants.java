@@ -19,7 +19,7 @@ public class CompareVcfVariants
     public static void main( String[] args ) throws Exception
     {
 		
-		VariantFilterSeq variantFilterSeq = new VariantFilterSeq("2");
+		VariantFilterSeq variantFilterSeq = new VariantFilterSeq("22");
 		
 		final String vcf1Path = "D:\\UMCG\\Genetica\\Projects\\RnaSeqEqtl\\ALL.phase1_release_v3.20101123.snps.passed.maf0.01.clinvarAdded.sorted.filteredRepRNAedJunc.vcf.gz";
 		final String vcf2Path = "D:\\UMCG\\Genetica\\Projects\\RnaSeqEqtl\\GoNL+1000G+ClinVar+UMCG_allSNPs.filtered.vcf.gz";
