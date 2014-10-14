@@ -41,6 +41,7 @@ public class App_1 {
 		String mafFilterData2 = args.length >= 7 ? args[6] : "0";
 		String snpIdFilterData1 = args.length >= 8 && !args[7].equals("null") ? args[7] : null;
 		String data1ProbCall = args.length == 9 ? args[8] : "0.4";
+		String forceChr = args.length == 10 ? args[9] : null;
 		
 		System.out.println("Data1 " + data1Type + " at " + data1Path);
 		System.out.println("Data2 " + data2Type + " at " + data2Path);
@@ -50,9 +51,11 @@ public class App_1 {
 		if(snpIdFilterData1 != null){
 			System.out.println("SNP ID filter data 1: " + snpIdFilterData1);
 		}
-		System.out.println("Data 1 prob call: " + data1ProbCall);
+		System.out.println("Data 1+2 prob call: " + data1ProbCall);
+		if(forceChr != null){
+			System.out.println("Force Chr: " + forceChr);
+		}
 		
-
 		HashMap<String, String> sampleIdMap = new HashMap<String, String>();
 		BufferedReader sampleMapReader = new BufferedReader(new FileReader(idMapPath));
 		String line;
@@ -78,14 +81,14 @@ public class App_1 {
 
 		
 		
-		RandomAccessGenotypeData data1 = RandomAccessGenotypeDataReaderFormats.valueOf(data1Type.toUpperCase()).createFilteredGenotypeData(data1Path, 1024, snpIdFilter, null, null, Double.parseDouble(data1ProbCall));
+		RandomAccessGenotypeData data1 = RandomAccessGenotypeDataReaderFormats.valueOf(data1Type.toUpperCase()).createFilteredGenotypeData(data1Path, 1024, snpIdFilter, null, forceChr, Double.parseDouble(data1ProbCall));
 
 		VariantFilterSeqPos seqPosFilter = new VariantFilterSeqPos();
 		for (GeneticVariant data1Var : data1) {
 			seqPosFilter.addSeqPos(data1Var);
 		}
 
-		RandomAccessGenotypeData data2 = RandomAccessGenotypeDataReaderFormats.valueOf(data2Type.toUpperCase()).createFilteredGenotypeData(data2Path, 1024, seqPosFilter, data2SampleFilter);
+		RandomAccessGenotypeData data2 = RandomAccessGenotypeDataReaderFormats.valueOf(data2Type.toUpperCase()).createFilteredGenotypeData(data2Path, 1024, seqPosFilter, data2SampleFilter, forceChr, Double.parseDouble(data1ProbCall));
 
 		//Do here to optimize trityper 
 		data2 = new VariantFilterableGenotypeDataDecorator(data2, new VariantQcChecker(Float.valueOf(mafFilterData2), 0, 0));
@@ -124,7 +127,7 @@ public class App_1 {
 
 		int i = 1;
 		int skippedVar = 0;
-
+		int comparedVar = 0;
 		
 		
 		BufferedWriter outSnp = new BufferedWriter(new FileWriter(outputFilePath + ".snp"));
@@ -148,6 +151,8 @@ public class App_1 {
 			GeneticVariant data2Var;
 			if ((data2Var = data2.getSnpVariantByPos(data1Var.getSequenceName(), data1Var.getStartPos())) != null) {
 
+				++comparedVar;
+				
 				if(!data1Var.getVariantAlleles().sameAlleles(data2Var.getVariantAlleles())){
 					System.err.println("Different alleles for " + data1Var.getPrimaryVariantId() + " " + data1Var.getVariantAlleles() + " vs " + data2Var.getVariantAlleles() + ". " + data1Var.getSequenceName() + ":" + data1Var.getStartPos() + " vs " + data2Var.getSequenceName() + ":" + data2Var.getStartPos() );
 					
@@ -205,6 +210,7 @@ public class App_1 {
 		
 		outSnp.close();
 		
+		System.out.println("Number of SNPs compared: " + comparedVar);
 		System.out.println("Skipped vars due to incosistant alleles: " + skippedVar);
 
 		BufferedWriter out = new BufferedWriter(new FileWriter(outputFilePath));
