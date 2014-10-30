@@ -51,7 +51,7 @@
 					</descriptorRefs>
 					<archive>
 						<manifest>
-							<mainClass>nl.systemsgenetics.qtlsnpbedannotator.main</mainClass>
+							<mainClass>nl.systemsgenetics.qtlsnpbedannotator.Main</mainClass>
 							<addDefaultImplementationEntries>true</addDefaultImplementationEntries>
 							<addDefaultSpecificationEntries>true</addDefaultSpecificationEntries>
 						</manifest>

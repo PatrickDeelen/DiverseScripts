@@ -37,7 +37,7 @@ public class FindEqtlMatchedRandom {
 		RandomAccessGenotypeData genotypes = RandomAccessGenotypeDataReaderFormats.VCF_FOLDER.createFilteredGenotypeData(args[1], 1000, null, null);
 
 		BufferedWriter writer = new BufferedWriter(new FileWriter(new File(args[2])));
-		writer.append("eQTL_SNP\teQTL_SNP_Chr_\teQTL_SNP_Pos\tControl_SNP\tControl_SNP_Chr\tControl_SNP_Pos\n");
+		writer.append("eQTL_SNP\teQTL_SNP_Chr_\teQTL_SNP_Pos\tControl_SNP\tControl_SNP_Chr\tControl_SNP_Pos\tControl_SNP_A1\tControl_SNP_A2\n");
 
 		int eQtlsWithoutMatch = 0;
 
@@ -55,6 +55,9 @@ public class FindEqtlMatchedRandom {
 			double maxMafOther = eQtlVariant.getMinorAlleleFrequency() + mafDiffPercentage;
 
 			for (GeneticVariant otherVariant : genotypes.getVariantsByRange(chr, pos - window < 0 ? 0 : pos - window, pos + window)) {
+				if (!otherVariant.isBiallelic() || !otherVariant.isSnp()){
+					continue;
+				}
 				if (otherVariant.getMinorAlleleFrequency() < minMafOther || otherVariant.getMinorAlleleFrequency() > maxMafOther) {
 					continue;
 				}
@@ -76,7 +79,7 @@ public class FindEqtlMatchedRandom {
 
 			if (controlVariant == null) {
 				++eQtlsWithoutMatch;
-				writer.append("\tNA\t0\t0\n");
+				writer.append("\tNA\t0\t0\t0\t0\n");
 			} else {
 				//GeneticVariant randomControl = potentialRandomControlVariants.get(random.nextInt());
 				writer.append('\t');
@@ -90,6 +93,10 @@ public class FindEqtlMatchedRandom {
 				writer.append(controlVariant.getSequenceName());
 				writer.append('\t');
 				writer.append(String.valueOf(controlVariant.getStartPos()));
+				writer.append('\t');
+				writer.append(controlVariant.getVariantAlleles().get(0).toString());
+				writer.append('\t');
+				writer.append(controlVariant.getVariantAlleles().get(1).toString());
 				writer.append('\n');
 			}
 
