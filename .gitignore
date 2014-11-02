@@ -1,3 +1,6 @@
 /SmallScripts/target/
 /GenomeStudioExportToOptiCall/target/
 /QtlSnpBedAnnotator/target/
+CompareGenotypeCalls/target/
+*/target/
+target/
