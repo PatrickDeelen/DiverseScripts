@@ -64,7 +64,7 @@
 					</descriptorRefs>
 					<archive>
 						<manifest>
-							<mainClass>nl.systemsgenetics.smallscripts.FindEqtlMatchedRandom</mainClass>
+							<mainClass>nl.systemsgenetics.smallscripts.ConvertRawTriTyperToOptiCall</mainClass>
 							<addDefaultImplementationEntries>true</addDefaultImplementationEntries>
 							<addDefaultSpecificationEntries>true</addDefaultSpecificationEntries>
 						</manifest>

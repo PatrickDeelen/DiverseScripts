@@ -8,10 +8,8 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
 import org.apache.commons.lang3.StringUtils;
 import org.molgenis.genotype.GenotypeDataException;
-import org.molgenis.genotype.util.ChrPos;
 import umcg.genetica.collections.ChrPosTreeMap;
 import umcg.genetica.io.trityper.WGAFileMatrixRawData;
 
@@ -26,18 +24,21 @@ public class ConvertRawTriTyperToOptiCall {
 	public static void main(String[] args) throws Exception {
 
 
-		String trityperFolderPath = "";
-		String snpInfoFilePath = "";
-		String outputFolderPath = "";
+		String trityperFolderPath = args[0];
+		String snpInfoFilePath = args[1];
+		String outputFolderPath = args[2];
 
+		System.out.println("TriTyper: " + trityperFolderPath);
+		System.out.println("SNP info: " + snpInfoFilePath);
+		System.out.println("Output folder: " + outputFolderPath);
 
 		File trityperFolder = new File(trityperFolderPath);
 		File outputFolder = new File(outputFolderPath);
 		outputFolder.mkdirs();
 
 		File snpFile = new File(trityperFolder, "SNPs.txt");
-		File sampleFile = new File(trityperFolder, "Samples.txt");
-		File rawdataFile = new File(trityperFolder, "***.txt");
+		File sampleFile = new File(trityperFolder, "Individuals.txt");
+		File rawdataFile = new File(trityperFolder, "RawDataMatrix.dat");
 
 		final TObjectIntHashMap<String> allSNPHash = new TObjectIntHashMap<String>();
 		final ChrPosTreeMap<String> snps = new ChrPosTreeMap<String>();
@@ -76,7 +77,7 @@ public class ConvertRawTriTyperToOptiCall {
 				@SuppressWarnings("RedundantStringConstructorCall")
 				String snpId = new String(snpInfo[2]);
 				snps.put(snpInfo[0], Integer.valueOf(snpInfo[1]), snpId);
-				snpAlleleMap.put(snpId, snpInfo[4].intern());
+				snpAlleleMap.put(snpId, snpInfo[3].intern());
 
 			}
 		}
@@ -87,7 +88,7 @@ public class ConvertRawTriTyperToOptiCall {
 
 		snpInfoFileReader.close();
 
-		WGAFileMatrixRawData rawdata = new WGAFileMatrixRawData(snps.size(), samples.size(), rawdataFile, true);
+		WGAFileMatrixRawData rawdata = new WGAFileMatrixRawData(allSNPHash.size(), samples.size(), rawdataFile, true);
 
 
 
@@ -100,6 +101,10 @@ public class ConvertRawTriTyperToOptiCall {
 			for (String sample : samples) {
 				outputWriter.append('\t');
 				outputWriter.append(sample);
+				outputWriter.append('A');
+				outputWriter.append('\t');
+				outputWriter.append(sample);
+				outputWriter.append('B');
 			}
 
 			outputWriter.write('\n');
