@@ -381,6 +381,9 @@ public class Main {
 
 			outputWriter.append(data1Samles[s1]);
 			outputWriter.append('\t');
+			
+			StringBuilder samplesMatchedString = new StringBuilder();
+			StringBuilder samplesMatchedRString = new StringBuilder();
 
 			for (int s2 = 0; s2 < data2Samles.length; ++s2) {
 
@@ -391,17 +394,21 @@ public class Main {
 
 				if (regression.getR() >= minRToMatch) {
 					if (matchFound) {
-						outputWriter.append(',');
+						samplesMatchedString.append(',');
+						samplesMatchedRString.append(',');
 						multipleMatched = true;
 					}
 					matchFound = true;
 					String data2Sample = data2Samles[s2];
-					outputWriter.append(data2Sample);
+					samplesMatchedString.append(data2Sample);
+					samplesMatchedRString.append(Double.toString(regression.getR()));
 					matchedSamples.adjustOrPutValue(data2Sample, 1, 1);
 				}
 
 			}
-			
+			outputWriter.append(samplesMatchedString);
+			outputWriter.append('\t');
+			outputWriter.append(samplesMatchedRString);
 			outputWriter.append('\n');
 
 			if (matchFound) {
@@ -429,7 +436,7 @@ public class Main {
 		System.out.println("Variants matched between input 1 and 2: " + variantsFoundInBoth);
 		System.out.println();
 		System.out.println("Comparisons using < 5000 variants: " + lowVarWarning);
-		System.out.println("Samples with match in input 2: " + sampleMatched + " of which " + sampleMultipleMatched + " match to multiple samples in input 2");
+		System.out.println("Samples with match in input 2: " + sampleMatched + " out of " + data1Samles.length + " of which " + sampleMultipleMatched + " match to multiple samples in input 2");
 		System.out.println("Samples in input 2 matched multiple times: " + matchedToMultipleCounter.getCount());
 
 	}
