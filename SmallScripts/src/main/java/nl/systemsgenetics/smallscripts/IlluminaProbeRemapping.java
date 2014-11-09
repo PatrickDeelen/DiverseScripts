@@ -9,6 +9,7 @@ import net.sf.samtools.CigarElement;
 import net.sf.samtools.CigarOperator;
 import net.sf.samtools.SAMFileReader;
 import net.sf.samtools.SAMRecord;
+import umcg.genetica.io.fasta.ReferenceGenomeFasta;
 
 /**
  *
@@ -21,8 +22,14 @@ public class IlluminaProbeRemapping {
 		File samFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\ImmunoProbes.sam");
 		String outputPrefix = "D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\ImmunoProbes";
 		File mappingReportFile = new File(outputPrefix + "MappingReport.txt");
-		File snpReport = new File(outputPrefix + "SnpReport.txt");
+		File referenceGenomeFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\human_g1k_v37.fasta");
 
+
+		ReferenceGenomeFasta referenceGenome = new ReferenceGenomeFasta(referenceGenomeFile, ReferenceGenomeFasta.HUMAN_NORMAL_CHR);
+		for(String chr : referenceGenome.getChromosomes()){
+			System.out.println(chr);
+		}
+		
 		
 		SAMFileReader inputSam = new SAMFileReader(samFile);
 		TObjectIntHashMap probeMatchedCounter = new TObjectIntHashMap();
@@ -32,11 +39,12 @@ public class IlluminaProbeRemapping {
 		
 		CSVWriter mappingReportWriter = new CSVWriter(new FileWriter(mappingReportFile), '\t', CSVWriter.NO_QUOTE_CHARACTER);
 
-		final String[] mappingReportEntry = new String[14];
+		final String[] mappingReportEntry = new String[15];
 		int i = 0;
 		mappingReportEntry[i++] = "SNP";
 		mappingReportEntry[i++] = "Chr";
 		mappingReportEntry[i++] = "SnpPos";
+		mappingReportEntry[i++] = "RefAllele";
 		mappingReportEntry[i++] = "LeftProbePos";
 		mappingReportEntry[i++] = "Strand";
 		mappingReportEntry[i++] = "ProbeLength";
@@ -104,11 +112,16 @@ public class IlluminaProbeRemapping {
 			int readLength = record.getReadLength();
 			
 			int snpPos = reverseStrand ? leftProbePos - 1 : leftProbePos + readLength;
+			
+			String chr = record.getReferenceName();
+			
+			String refAllele = referenceGenome.loadedChr(chr) ? String.valueOf(referenceGenome.getNucleotide(chr, snpPos)) : "";
 
 			i = 0;
 			mappingReportEntry[i++] = snpName;
-			mappingReportEntry[i++] = record.getReferenceName();
+			mappingReportEntry[i++] = chr;
 			mappingReportEntry[i++] = Integer.toString(snpPos);
+			mappingReportEntry[i++] = refAllele;
 			mappingReportEntry[i++] = Integer.toString(leftProbePos);
 			mappingReportEntry[i++] = reverseStrand ? "-" : "+";
 			mappingReportEntry[i++] = Integer.toString(readLength);
