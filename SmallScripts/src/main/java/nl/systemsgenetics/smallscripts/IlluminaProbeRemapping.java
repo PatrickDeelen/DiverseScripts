@@ -23,23 +23,31 @@ public class IlluminaProbeRemapping {
 		String outputPrefix = "D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\ImmunoProbes";
 		File mappingReportFile = new File(outputPrefix + "MappingReport.txt");
 		File referenceGenomeFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\human_g1k_v37.fasta");
+		int maxTotalEditDistance = 5; //Including clipping		
 
 
 		ReferenceGenomeFasta referenceGenome = new ReferenceGenomeFasta(referenceGenomeFile, ReferenceGenomeFasta.HUMAN_NORMAL_CHR);
-		for(String chr : referenceGenome.getChromosomes()){
+		for (String chr : referenceGenome.getChromosomes()) {
 			System.out.println(chr);
 		}
-		
-		
+
+
 		SAMFileReader inputSam = new SAMFileReader(samFile);
 		TObjectIntHashMap probeMatchedCounter = new TObjectIntHashMap();
+		TObjectIntHashMap probeWeakMatchedCounter = new TObjectIntHashMap();
 		for (SAMRecord record : inputSam) {
+		
+			if(getClipping(record.getCigar()).getClippingTotal() + record.getIntegerAttribute("NM") > maxTotalEditDistance){
+				probeWeakMatchedCounter.adjustOrPutValue(record.getReadName(), 1, 1);
+				continue;
+			}
+			
 			probeMatchedCounter.adjustOrPutValue(record.getReadName(), 1, 1);
 		}
-		
+
 		CSVWriter mappingReportWriter = new CSVWriter(new FileWriter(mappingReportFile), '\t', CSVWriter.NO_QUOTE_CHARACTER);
 
-		final String[] mappingReportEntry = new String[15];
+		final String[] mappingReportEntry = new String[16];
 		int i = 0;
 		mappingReportEntry[i++] = "SNP";
 		mappingReportEntry[i++] = "Chr";
@@ -56,14 +64,15 @@ public class IlluminaProbeRemapping {
 		mappingReportEntry[i++] = "EditDistanceAndClipping";
 		mappingReportEntry[i++] = "ClippingAtSnp";
 		mappingReportEntry[i++] = "ProbeMatchedCount";
+		mappingReportEntry[i++] = "ProbeWeakMatchedCount";
 		mappingReportWriter.writeNext(mappingReportEntry);
 
 
-		
 
-		
-		
-		
+
+
+
+
 		inputSam = new SAMFileReader(samFile);
 		for (SAMRecord record : inputSam) {
 
@@ -72,30 +81,8 @@ public class IlluminaProbeRemapping {
 			boolean reverseStrand = record.getReadNegativeStrandFlag();
 
 			Cigar cigar = record.getCigar();
-
-			final int clippingLeft;
-			final int clippingRight;
-
-			if (cigar.numCigarElements() > 1) {
-				CigarElement firstCigarElement = cigar.getCigarElement(0);
-				CigarElement lastCigarElement = cigar.getCigarElement(cigar.numCigarElements() - 1);
-
-				if (firstCigarElement.getOperator() == CigarOperator.S) {
-					clippingLeft = firstCigarElement.getLength();
-				} else {
-					clippingLeft = 0;
-				}
-
-				if (lastCigarElement.getOperator() == CigarOperator.S) {
-					clippingRight = lastCigarElement.getLength();
-				} else {
-					clippingRight = 0;
-				}
-
-			} else {
-				clippingLeft = 0;
-				clippingRight = 0;
-			}
+			
+			Clipping clipping = getClipping(cigar);
 
 			boolean unexpectedCigarOperator = false;
 			for (CigarElement cigarElement : cigar.getCigarElements()) {
@@ -104,17 +91,21 @@ public class IlluminaProbeRemapping {
 				}
 			}
 
-			boolean clippingAtSnp = (clippingLeft > 0 && reverseStrand) || (clippingRight > 0 && !reverseStrand);
+			boolean clippingAtSnp = (clipping.getClippingLeft() > 0 && reverseStrand) || (clipping.getClippingRight() > 0 && !reverseStrand);
 
 			Integer nm = record.getIntegerAttribute("NM");
+			
+			if(nm + clipping.getClippingTotal() > maxTotalEditDistance){
+				continue;
+			}
 
-			int leftProbePos = record.getAlignmentStart() - clippingLeft;
+			int leftProbePos = record.getAlignmentStart() - clipping.getClippingLeft();
 			int readLength = record.getReadLength();
-			
+
 			int snpPos = reverseStrand ? leftProbePos - 1 : leftProbePos + readLength;
-			
+
 			String chr = record.getReferenceName();
-			
+
 			String refAllele = referenceGenome.loadedChr(chr) ? String.valueOf(referenceGenome.getNucleotide(chr, snpPos)) : "";
 
 			i = 0;
@@ -127,13 +118,14 @@ public class IlluminaProbeRemapping {
 			mappingReportEntry[i++] = Integer.toString(readLength);
 			mappingReportEntry[i++] = record.getCigarString();
 			mappingReportEntry[i++] = Boolean.toString(unexpectedCigarOperator);
-			mappingReportEntry[i++] = Integer.toString(clippingLeft);
-			mappingReportEntry[i++] = Integer.toString(clippingRight);
-			mappingReportEntry[i++] = Integer.toString(clippingLeft);
-			mappingReportEntry[i++] = Integer.toString(clippingLeft);
+			mappingReportEntry[i++] = Integer.toString(clipping.getClippingLeft());
+			mappingReportEntry[i++] = Integer.toString(clipping.getClippingRight());
+			mappingReportEntry[i++] = Integer.toString(nm);
+			mappingReportEntry[i++] = Integer.toString(nm + clipping.getClippingTotal());
 			mappingReportEntry[i++] = Boolean.toString(clippingAtSnp);
 			mappingReportEntry[i++] = Integer.toString(probeMatchedCounter.get(snpName));
-			
+			mappingReportEntry[i++] = Integer.toString(probeWeakMatchedCounter.get(snpName));
+
 			mappingReportWriter.writeNext(mappingReportEntry);
 
 
@@ -143,5 +135,58 @@ public class IlluminaProbeRemapping {
 		mappingReportWriter.close();
 		System.out.println("Done");
 
+	}
+
+	private static Clipping getClipping(Cigar cigar) {
+
+		final int clippingLeft;
+		final int clippingRight;
+
+		if (cigar.numCigarElements() > 1) {
+			CigarElement firstCigarElement = cigar.getCigarElement(0);
+			CigarElement lastCigarElement = cigar.getCigarElement(cigar.numCigarElements() - 1);
+
+			if (firstCigarElement.getOperator() == CigarOperator.S) {
+				clippingLeft = firstCigarElement.getLength();
+			} else {
+				clippingLeft = 0;
+			}
+
+			if (lastCigarElement.getOperator() == CigarOperator.S) {
+				clippingRight = lastCigarElement.getLength();
+			} else {
+				clippingRight = 0;
+			}
+
+		} else {
+			clippingLeft = 0;
+			clippingRight = 0;
+		}
+
+		return new Clipping(clippingLeft, clippingRight);
+
+	}
+
+	private static class Clipping {
+
+		final int clippingLeft;
+		final int clippingRight;
+
+		public Clipping(int clippingLeft, int clippingRight) {
+			this.clippingLeft = clippingLeft;
+			this.clippingRight = clippingRight;
+		}
+
+		public int getClippingLeft() {
+			return clippingLeft;
+		}
+
+		public int getClippingRight() {
+			return clippingRight;
+		}
+		
+		public int getClippingTotal() {
+			return clippingLeft + clippingRight;
+		}
 	}
 }
