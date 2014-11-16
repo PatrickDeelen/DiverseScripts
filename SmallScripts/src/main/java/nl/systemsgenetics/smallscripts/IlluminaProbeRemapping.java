@@ -29,13 +29,18 @@ public class IlluminaProbeRemapping {
 	public static void main(String[] args) throws Exception {
 
 		File samFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\ImmunoProbes.sam");
-		String outputPrefix = "D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\ImmunoProbes";
-		File mappingReportFile = new File(outputPrefix + "MappingReport.txt");
-		File referenceGenomeFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\human_g1k_v37.fasta");
 		File illuminaMappingFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\Immuno_BeadChip_11419691_B.csv");
+		String outputPrefix = "D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\ImmunoProbes";
+		
+		
+		File referenceGenomeFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\human_g1k_v37.fasta");
+		
 		int maxTotalEditDistance = 5; //Including clipping	
 		int probeBasesToCheckForMismatch = 10; // Bases nearest to SNP to check for mismatch
 		double mafCutoffOverlappingVariants = 0.01;
+
+		File mappingReportFile = new File(outputPrefix + "MappingReport.txt");
+		File passedProbesFile = new File(outputPrefix + "PassedProbes.txt");
 
 
 		String vcf1000gPath = "D:\\UMCG\\Genetica\\Data\\ALL.wgs.phase3_shapeit2_mvncall_integrated_v5.20130502.sites";
@@ -57,7 +62,7 @@ public class IlluminaProbeRemapping {
 
 
 
-
+		
 
 
 
@@ -67,6 +72,8 @@ public class IlluminaProbeRemapping {
 		for (String chr : referenceGenome.getChromosomes()) {
 			System.out.println(chr);
 		}
+		
+		
 
 
 		SAMFileReader inputSam = new SAMFileReader(samFile);
@@ -84,7 +91,7 @@ public class IlluminaProbeRemapping {
 
 		CSVWriter mappingReportWriter = new CSVWriter(new FileWriter(mappingReportFile), '\t', CSVWriter.NO_QUOTE_CHARACTER);
 
-		final String[] mappingReportEntry = new String[38];
+		final String[] mappingReportEntry = new String[47];
 		int i = 0;
 		mappingReportEntry[i++] = "SNP";
 		mappingReportEntry[i++] = "Chr";
@@ -110,6 +117,7 @@ public class IlluminaProbeRemapping {
 		mappingReportEntry[i++] = "Illumina_source_a2";
 		mappingReportEntry[i++] = "1000G_Ref";
 		mappingReportEntry[i++] = "1000G_Alt";
+		mappingReportEntry[i++] = "1000G_StartPos";
 		mappingReportEntry[i++] = "1000G_AF";
 		mappingReportEntry[i++] = "1000G_AlleleCount";
 		mappingReportEntry[i++] = "1000G_Snp";
@@ -118,26 +126,50 @@ public class IlluminaProbeRemapping {
 		mappingReportEntry[i++] = "1000G_VarInProbeEnd";
 		mappingReportEntry[i++] = "GoNL_Ref";
 		mappingReportEntry[i++] = "GoNL_Alt";
+		mappingReportEntry[i++] = "GoNL_StartPos";
 		mappingReportEntry[i++] = "GoNL_AF";
 		mappingReportEntry[i++] = "GoNL_AlleleCount";
 		mappingReportEntry[i++] = "GoNL_Snp";
 		mappingReportEntry[i++] = "GoNL_MultiVarAtPos";
 		mappingReportEntry[i++] = "GoNL_InDelOverLap";
 		mappingReportEntry[i++] = "GoNL_VarInProbeEnd";
+		mappingReportEntry[i++] = "VariantRef";
+		mappingReportEntry[i++] = "VariantAlt";
+		mappingReportEntry[i++] = "BiallelicVariant";
+		mappingReportEntry[i++] = "SnpVariant";
+		mappingReportEntry[i++] = "AlleleMatch";
+		mappingReportEntry[i++] = "AlleleMatchedReversed";
+		mappingReportEntry[i++] = "ProbePassedQc";
 		mappingReportWriter.writeNext(mappingReportEntry);
 
 
+		CSVWriter passedProbesWriter = new CSVWriter(new FileWriter(passedProbesFile), '\t', CSVWriter.NO_QUOTE_CHARACTER);
 
-
+		final String[] passedProbeEntry = new String[47];
+		i = 0;
+		passedProbeEntry[i++] = "Id";
+		passedProbeEntry[i++] = "Chr";
+		passedProbeEntry[i++] = "Pos";
+		passedProbeEntry[i++] = "Ref";
+		passedProbeEntry[i++] = "Alt";
+		passedProbeEntry[i++] = "A";
+		passedProbeEntry[i++] = "B";
+		passedProbesWriter.writeNext(passedProbeEntry);
 
 
 
 		inputSam = new SAMFileReader(samFile);
 		for (SAMRecord record : inputSam) {
 
-			String snpName = record.getReadName();
-
-			boolean reverseStrand = record.getReadNegativeStrandFlag();
+			final String snpName = record.getReadName();
+			final boolean reverseStrand = record.getReadNegativeStrandFlag();
+			final Integer nm = record.getIntegerAttribute("NM");
+			final boolean clippingAtSnp;
+			final int leftProbePos;
+			final int probeLength;
+			final int snpPos;
+			String chr;
+			int mismatchesProbeEnd;
 
 			Cigar cigar = record.getCigar();
 
@@ -150,24 +182,27 @@ public class IlluminaProbeRemapping {
 				}
 			}
 
-			boolean clippingAtSnp = (clipping.getClippingLeft() > 0 && reverseStrand) || (clipping.getClippingRight() > 0 && !reverseStrand);
+			clippingAtSnp = (clipping.getClippingLeft() > 0 && reverseStrand) || (clipping.getClippingRight() > 0 && !reverseStrand);
 
-			Integer nm = record.getIntegerAttribute("NM");
 
 			if (nm + clipping.getClippingTotal() > maxTotalEditDistance) {
 				continue;
 			}
 
-			int leftProbePos = record.getAlignmentStart() - clipping.getClippingLeft();
-			int probeLength = record.getReadLength();
+			
+			leftProbePos = record.getAlignmentStart() - clipping.getClippingLeft();
+			
+			probeLength = record.getReadLength();
+			
+			snpPos = reverseStrand ? leftProbePos - 1 : leftProbePos + probeLength;
 
-			int snpPos = reverseStrand ? leftProbePos - 1 : leftProbePos + probeLength;
+			chr = record.getReferenceName();
 
-			String chr = record.getReferenceName();
+			IlluminaProbeInfo illuminaInfo = illuminaProbeInfo.get(snpName);
 
 			//Check for mismatch in n bases next to SNP
 
-			int mismatchesProbeEnd;
+			
 			if (referenceGenome.loadedChr(chr)) {
 				mismatchesProbeEnd = 0;
 
@@ -223,7 +258,7 @@ public class IlluminaProbeRemapping {
 
 			for (GeneticVariant g1000Var : g1000.getVariantsByPos(chr, snpPos)) {
 
-				if (g1000Var.getStartPos() == snpPos) {
+				if (g1000Var.getStartPos() == snpPos || (!reverseStrand && !illuminaInfo.isSnp() && g1000Var.getStartPos() == snpPos - 1)) {
 					if (probe1000gVariant == null) {
 						probe1000gVariant = g1000Var;
 					} else {
@@ -241,8 +276,9 @@ public class IlluminaProbeRemapping {
 
 			String refAllele1000g = "";
 			String altAllele1000g = "";
+			int pos1000gVariant = -1;
 			float af1000g = Float.NaN;
-			int alleleCount = 0;
+			int alleleCount1000g = 0;
 			boolean snp = false;
 
 			if (probe1000gVariant != null && !multipleVarAtPos) {
@@ -250,9 +286,10 @@ public class IlluminaProbeRemapping {
 				if (probe1000gVariant.isBiallelic()) {
 					refAllele1000g = probe1000gVariant.getVariantAlleles().get(0).toString();
 					altAllele1000g = probe1000gVariant.getVariantAlleles().get(1).toString();
+					pos1000gVariant = probe1000gVariant.getStartPos();
 					af1000g = ((ArrayList<Float>) probe1000gVariant.getAnnotationValues().get("EUR_AF")).get(0);
 				}
-				alleleCount = probe1000gVariant.getVariantAlleles().getAlleleCount();
+				alleleCount1000g = probe1000gVariant.getVariantAlleles().getAlleleCount();
 				snp = probe1000gVariant.isSnp();
 
 			}
@@ -265,7 +302,7 @@ public class IlluminaProbeRemapping {
 
 			for (GeneticVariant gonlVar : gonl.getVariantsByPos(chr, snpPos)) {
 
-				if (gonlVar.getStartPos() == snpPos) {
+				if (gonlVar.getStartPos() == snpPos || (!reverseStrand && !illuminaInfo.isSnp() && gonlVar.getStartPos() == snpPos - 1)) {
 					if (probeGonlVariant == null) {
 						probeGonlVariant = gonlVar;
 					} else {
@@ -284,6 +321,7 @@ public class IlluminaProbeRemapping {
 			String refAlleleGonl = "";
 			String altAlleleGonl = "";
 			float afGonl = Float.NaN;
+			int posGonlVariant = -1;
 			int alleleCountGonl = 0;
 			boolean snpGonl = false;
 
@@ -292,6 +330,7 @@ public class IlluminaProbeRemapping {
 				if (probeGonlVariant.isBiallelic()) {
 					refAlleleGonl = probeGonlVariant.getVariantAlleles().get(0).toString();
 					altAlleleGonl = probeGonlVariant.getVariantAlleles().get(1).toString();
+					posGonlVariant = probeGonlVariant.getStartPos();
 					afGonl = ((ArrayList<Float>) probeGonlVariant.getAnnotationValues().get("AF")).get(0);
 				}
 				alleleCountGonl = probeGonlVariant.getVariantAlleles().getAlleleCount();
@@ -308,17 +347,20 @@ public class IlluminaProbeRemapping {
 			if (reverseStrand) {
 
 				beginQuery = snpPos + 1;
-				endQuery = snpPos + 1 + probeBasesToCheckForMismatch;
+				endQuery = snpPos + probeBasesToCheckForMismatch;
 
 			} else {
 
 				beginQuery = snpPos - probeBasesToCheckForMismatch - 1;
-				endQuery = snpPos;
+				endQuery = snpPos - 1;
 
 			}
 
 			boolean g1000SnpInProbeEnd = false;
 			for (GeneticVariant g1000Var : g1000.getVariantsByRange(chr, beginQuery, endQuery)) {
+				if (g1000Var.getStartPos() == pos1000gVariant) {
+					continue;//This can happen for indels
+				}
 				for (float af : (ArrayList<Float>) g1000Var.getAnnotationValues().get("EUR_AF")) {
 					if (af >= mafCutoffOverlappingVariants) {
 						g1000SnpInProbeEnd = true;
@@ -328,6 +370,9 @@ public class IlluminaProbeRemapping {
 
 			boolean gonlSnpInProbeEnd = false;
 			for (GeneticVariant gonlVar : gonl.getVariantsByRange(chr, beginQuery, endQuery)) {
+				if (gonlVar.getStartPos() == posGonlVariant) {
+					continue;//This can happen for indels
+				}
 				for (float af : (ArrayList<Float>) gonlVar.getAnnotationValues().get("AF")) {
 					if (af >= mafCutoffOverlappingVariants) {
 						gonlSnpInProbeEnd = true;
@@ -335,8 +380,123 @@ public class IlluminaProbeRemapping {
 				}
 			}
 
-			IlluminaProbeInfo illuminaInfo = illuminaProbeInfo.get(snpName);
 
+
+
+			final String variantRefAllele;
+			final String variantAltAllele;
+
+			final boolean bialleleicVariant;
+
+			if (alleleCount1000g > 2 || alleleCountGonl > 2) {
+				//Yes first check this for next loop to work
+				variantRefAllele = "";
+				variantAltAllele = "";
+				bialleleicVariant = false;
+			} else {
+				if (alleleCount1000g == 2 || alleleCountGonl == 2) {
+
+					if (alleleCount1000g == 2 && alleleCountGonl == 2) {
+
+						if (refAllele1000g.equals(refAlleleGonl) && altAllele1000g.equals(altAlleleGonl)) {
+							variantRefAllele = refAllele1000g;
+							variantAltAllele = altAllele1000g;
+							bialleleicVariant = true;
+						} else {
+							variantRefAllele = "";
+							variantAltAllele = "";
+							bialleleicVariant = false;
+						}
+
+					} else if (alleleCount1000g == 2) {
+						variantRefAllele = refAllele1000g;
+						variantAltAllele = altAllele1000g;
+						bialleleicVariant = true;
+					} else { //alleleCountGonl == 2
+						variantRefAllele = refAlleleGonl;
+						variantAltAllele = altAlleleGonl;
+						bialleleicVariant = true;
+					}
+
+
+				} else {
+					variantRefAllele = "";
+					variantAltAllele = "";
+					bialleleicVariant = false;
+				}
+			}
+
+
+			final boolean isSnpVariant = variantAltAllele.length() == 1 && variantRefAllele.length() == 1;
+
+			final boolean alleleMatch;
+			final boolean alleleMatchedAfterComplement;
+
+			if (illuminaInfo.isSnp() && isSnpVariant && bialleleicVariant) {
+
+				char aRef = variantRefAllele.charAt(0);
+				char aAlt = variantAltAllele.charAt(0);
+
+				char aIllum1 = illuminaInfo.getA1();
+				char aIllum2 = illuminaInfo.getA2();
+
+				if ((aRef == aIllum1 && aAlt == aIllum2) || (aAlt == aIllum1 && aRef == aIllum2)) {
+					alleleMatch = true;
+					alleleMatchedAfterComplement = false;
+				} else if ((aRef == complement(aIllum1) && aAlt == complement(aIllum2)) || (aAlt == complement(aIllum1) && aRef == complement(aIllum2))) {
+					alleleMatch = true;
+					alleleMatchedAfterComplement = true;
+				} else {
+					alleleMatch = false;
+					alleleMatchedAfterComplement = false;
+				}
+
+			} else if (!illuminaInfo.isSnp() && !isSnpVariant && bialleleicVariant) {
+
+				if (!illuminaInfo.getA1_b().equals("-")) {
+					throw new Exception("");
+				}
+
+				if (variantAltAllele.length() == 1) {
+					if (illuminaInfo.getA2_b().equals(variantRefAllele.substring(1))) {
+						alleleMatch = true;
+						alleleMatchedAfterComplement = false;
+					} else {
+						alleleMatch = false;
+						alleleMatchedAfterComplement = false;
+					}
+				} else {
+					if (illuminaInfo.getA2_b().equals(variantAltAllele.substring(1))) {
+						alleleMatch = true;
+						alleleMatchedAfterComplement = false;
+					} else {
+						alleleMatch = false;
+						alleleMatchedAfterComplement = false;
+					}
+				}
+
+
+			} else {
+				alleleMatch = false;
+				alleleMatchedAfterComplement = false;
+			}
+
+			final boolean probePassedQc;
+
+			if (probeMatchedCounter.get(snpName) == 1
+					&& !g1000SnpInProbeEnd
+					&& !gonlSnpInProbeEnd
+					&& mismatchesProbeEnd == 0
+					&& alleleMatch) {
+				probePassedQc = true;
+			} else {
+				probePassedQc = false;
+			}
+
+			if(chr.equals("X") && (ParB37.PAR1.isInChrXRange(snpPos)||ParB37.PAR2.isInChrXRange(snpPos))){
+				chr = "XY";
+			}
+			
 
 			i = 0;
 			mappingReportEntry[i++] = snpName;
@@ -363,20 +523,29 @@ public class IlluminaProbeRemapping {
 			mappingReportEntry[i++] = String.valueOf(illuminaInfo.getA2_b());
 			mappingReportEntry[i++] = refAllele1000g;
 			mappingReportEntry[i++] = altAllele1000g;
+			mappingReportEntry[i++] = String.valueOf(pos1000gVariant);
 			mappingReportEntry[i++] = String.valueOf(af1000g);
-			mappingReportEntry[i++] = String.valueOf(alleleCount);
+			mappingReportEntry[i++] = String.valueOf(alleleCount1000g);
 			mappingReportEntry[i++] = String.valueOf(snp);
 			mappingReportEntry[i++] = String.valueOf(multipleVarAtPos);
 			mappingReportEntry[i++] = String.valueOf(probe1000gOverlap);
 			mappingReportEntry[i++] = String.valueOf(g1000SnpInProbeEnd);
 			mappingReportEntry[i++] = refAlleleGonl;
 			mappingReportEntry[i++] = altAlleleGonl;
+			mappingReportEntry[i++] = String.valueOf(posGonlVariant);
 			mappingReportEntry[i++] = String.valueOf(afGonl);
 			mappingReportEntry[i++] = String.valueOf(alleleCountGonl);
 			mappingReportEntry[i++] = String.valueOf(snpGonl);
 			mappingReportEntry[i++] = String.valueOf(multipleVarAtPosGonl);
 			mappingReportEntry[i++] = String.valueOf(probeGonlOverlap);
 			mappingReportEntry[i++] = String.valueOf(gonlSnpInProbeEnd);
+			mappingReportEntry[i++] = variantRefAllele;
+			mappingReportEntry[i++] = variantAltAllele;
+			mappingReportEntry[i++] = String.valueOf(bialleleicVariant);
+			mappingReportEntry[i++] = String.valueOf(isSnpVariant);
+			mappingReportEntry[i++] = String.valueOf(alleleMatch);
+			mappingReportEntry[i++] = String.valueOf(alleleMatchedAfterComplement);
+			mappingReportEntry[i++] = String.valueOf(probePassedQc);
 
 			mappingReportWriter.writeNext(mappingReportEntry);
 
@@ -513,6 +682,61 @@ public class IlluminaProbeRemapping {
 
 		private boolean isSnpAllele(char a) {
 			return a == 'A' || a == 'T' || a == 'G' || a == 'C';
+		}
+	}
+
+	private static enum ParB37 {
+
+		/*
+		 * http://www.ncbi.nlm.nih.gov/projects/genome/assembly/grc/human/
+		 * 
+		 * HG37
+		 * 
+		 * Name 	Chr 	Start 	Stop
+		 * PAR#1 	X 	60,001 	2,699,520
+		 * PAR#2 	X 	154,931,044 	155,260,560
+		 * PAR#1 	Y 	10,001 	2,649,520
+		 * PAR#2 	Y 	59,034,050 	59,363,566
+		 */
+		PAR1(60001, 2699520, 10001, 2649520),
+		PAR2(154931044, 155260560, 59034050, 59363566);
+		
+		private final int startX;
+		private final int stopX;
+		private final int startY;
+		private final int stopY;
+
+		ParB37(int startX, int stopX, int startY, int stopY) {
+			this.startX = startX;
+			this.stopX = stopX;
+			this.startY = startY;
+			this.stopY = stopY;
+		}
+		
+		public boolean isInChrXRange(int pos){
+			return pos >= this.startX && pos < this.stopX;
+		}
+		
+		public boolean isInChrYRange(int pos){
+			return pos >= this.startY && pos < this.stopY;
+		}
+		
+		public int posInY(int posX){
+			if(!isInChrXRange(posX)){
+				throw new IllegalArgumentException();
+			}
+			
+			return startY + posX - startX;
+			
+		}
+		
+		public int posInX(int posY){
+			if(!isInChrYRange(posY)){
+				throw new IllegalArgumentException();
+			}
+			
+			return startX + posY - startY;
+			
 		}
 	}
 }
