@@ -8,6 +8,7 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import net.sf.samtools.Cigar;
@@ -15,6 +16,7 @@ import net.sf.samtools.CigarElement;
 import net.sf.samtools.CigarOperator;
 import net.sf.samtools.SAMFileReader;
 import net.sf.samtools.SAMRecord;
+import org.apache.mahout.math.Arrays;
 import org.molgenis.genotype.RandomAccessGenotypeData;
 import org.molgenis.genotype.RandomAccessGenotypeDataReaderFormats;
 import org.molgenis.genotype.variant.GeneticVariant;
@@ -28,14 +30,14 @@ public class IlluminaProbeRemapping {
 
 	public static void main(String[] args) throws Exception {
 
-//		File samFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\ImmunoProbes.sam");
-//		File illuminaMappingFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\Immuno_BeadChip_11419691_B.csv");
-//		String outputPrefix = "D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\ImmunoProbes";
+		File samFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\ImmunoProbes.sam");
+		File illuminaMappingFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\Immuno_BeadChip_11419691_B.csv");
+		String outputPrefix = "D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\ImmunoProbes";
 
 
-		File samFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\CytoSNP-12v2.1Probes.sam");
-		File illuminaMappingFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\HumanCytoSNP-12v2.1-FFPE_G.csv");
-		String outputPrefix = "D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\CytoSNP-12v2.1Probes";
+//		File samFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\CytoSNP-12v2.1Probes.sam");
+//		File illuminaMappingFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\HumanCytoSNP-12v2-1_L.csv");
+//		String outputPrefix = "D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\CytoSNP-12v2.1Probes";
 
 //		File samFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\CytoSNP-12v2Probes.sam");
 //		File illuminaMappingFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\HumanCytoSNP-12v2_H.csv");
@@ -49,7 +51,7 @@ public class IlluminaProbeRemapping {
 
 		File mappingReportFile = new File(outputPrefix + "MappingReport.txt");
 		File passedProbesFile = new File(outputPrefix + "PassedProbes.txt");
-
+		File failedProbesFile = new File(outputPrefix + "FailedProbes.txt");
 
 		String vcf1000gPath = "D:\\UMCG\\Genetica\\Data\\ALL.wgs.phase3_shapeit2_mvncall_integrated_v5.20130502.sites";
 		String vcfFolderGoNLPath = "D:\\UMCG\\Genetica\\Data\\GoNL\\release5.2\\01_public_SNVs_and_InDels";
@@ -58,12 +60,32 @@ public class IlluminaProbeRemapping {
 		RandomAccessGenotypeData gonl = RandomAccessGenotypeDataReaderFormats.VCF_FOLDER.createGenotypeData(vcfFolderGoNLPath);
 
 		HashMap<String, IlluminaProbeInfo> illuminaProbeInfo = new HashMap<String, IlluminaProbeInfo>();
+		HashSet<String> probesInManifestNotMapped = new HashSet<String>();
+
+		TObjectIntHashMap<FailReason> failCounter = new TObjectIntHashMap<FailReason>();
 
 		CSVReader reader = new CSVReader(new FileReader(illuminaMappingFile), ',', '\0');
+		boolean header = true;
 		String[] nextLine;
 		while ((nextLine = reader.readNext()) != null) {
-			if (nextLine.length >= 17 && !nextLine[0].equals("IlmnID")) {
-				illuminaProbeInfo.put(new String(nextLine[1]), new IlluminaProbeInfo(nextLine[3], nextLine[16]));
+			if (header) {
+				if (nextLine[0].equals("[Assay]")) {
+					header = false;
+				}
+			} else {
+				if (nextLine[0].equals("[Controls]")) {
+					break;
+				}
+				if (nextLine.length >= 17 && !nextLine[0].equals("IlmnID")) {
+					try {
+						String snp = new String(nextLine[1]);
+						probesInManifestNotMapped.add(snp);
+						illuminaProbeInfo.put(snp, new IlluminaProbeInfo(nextLine[3], nextLine[16]));
+					} catch (Exception e) {
+						System.err.println(Arrays.toString(nextLine));
+						throw e;
+					}
+				}
 			}
 		}
 
@@ -158,6 +180,16 @@ public class IlluminaProbeRemapping {
 		passedProbeEntry[i++] = "B";
 		passedProbesWriter.writeNext(passedProbeEntry);
 
+		HashSet<String> failReported = new HashSet<String>();
+		CSVWriter failedProbesWriter = new CSVWriter(new FileWriter(failedProbesFile), '\t', CSVWriter.NO_QUOTE_CHARACTER);
+
+		final String[] failedProbeEntry = new String[2];
+		i = 0;
+		failedProbeEntry[i++] = "Id";
+		failedProbeEntry[i++] = "Reason";
+		failedProbesWriter.writeNext(failedProbeEntry);
+
+
 
 
 		inputSam = new SAMFileReader(samFile);
@@ -174,9 +206,9 @@ public class IlluminaProbeRemapping {
 			int mismatchesProbeEnd;
 
 			if (!illuminaProbeInfo.containsKey(snpName)) {
-				System.err.println(snpName + " not found in manifest");
-				continue;
+				throw new Exception(snpName + " not found in manifest");
 			}
+
 
 			Cigar cigar = record.getCigar();
 
@@ -196,6 +228,7 @@ public class IlluminaProbeRemapping {
 				continue;
 			}
 
+			probesInManifestNotMapped.remove(snpName);
 
 			leftProbePos = record.getAlignmentStart() - clipping.getClippingLeft();
 
@@ -207,10 +240,22 @@ public class IlluminaProbeRemapping {
 
 			IlluminaProbeInfo illuminaInfo = illuminaProbeInfo.get(snpName);
 
-			if(illuminaInfo.hasNoAlleles()){
+			if (illuminaInfo.hasNoAlleles()) {
+
+				if (!failReported.contains(snpName)) {
+					failReported.add(snpName);
+
+					failCounter.adjustOrPutValue(FailReason.ILLUMINA_EXCLUDED, 1, 1);
+					i = 0;
+					failedProbeEntry[i++] = snpName;
+					failedProbeEntry[i++] = FailReason.ILLUMINA_EXCLUDED.getReason();
+					failedProbesWriter.writeNext(failedProbeEntry);
+
+				}
+
 				continue;
 			}
-			
+
 			//Check for mismatch in n bases next to SNP
 
 
@@ -515,7 +560,9 @@ public class IlluminaProbeRemapping {
 					&& !g1000SnpInProbeEnd
 					&& !gonlSnpInProbeEnd
 					&& mismatchesProbeEnd == 0
-					&& alleleMatch) {
+					&& alleleMatch
+					&& !probe1000gOverlap
+					&& !probeGonlOverlap) {
 				probePassedQc = true;
 			} else {
 				probePassedQc = false;
@@ -660,15 +707,75 @@ public class IlluminaProbeRemapping {
 				passedProbeEntry[i++] = AAllele;
 				passedProbeEntry[i++] = BAllele;
 				passedProbesWriter.writeNext(passedProbeEntry);
+			} else if (!failReported.contains(snpName)) {
+
+
+
+				failReported.add(snpName);
+
+				FailReason reason;
+
+
+				/*
+				 * 
+				 * probeMatchedCounter.get(snpName) == 1
+				 && !g1000SnpInProbeEnd
+				 && !gonlSnpInProbeEnd
+				 && mismatchesProbeEnd == 0
+				 && alleleMatch
+				 && !probe1000gOverlap
+				 && !probeGonlOverlap) {
+				 * 
+				 */
+				if (probeMatchedCounter.get(snpName) > 1) {
+					reason = FailReason.MULTIPLE_MAPPING;
+				} else if (alleleCount1000g == 0 && alleleCountGonl == 0) {
+					reason = FailReason.NO_VAR_REFERENCE;
+				} else if (!bialleleicVariant) {
+					reason = FailReason.NOT_BIALLELIC_REFERENCE;
+				} else if (!alleleMatch) {
+					reason = FailReason.INCONSISTENT_ALLELES;
+				} else if (mismatchesProbeEnd >= 1) {
+					reason = FailReason.MISMATCH_TO_REFERENCE_IN_END;
+				} else if (g1000SnpInProbeEnd || gonlSnpInProbeEnd) {
+					reason = FailReason.VARIATION_PROBE_END;
+				} else if (probe1000gOverlap || probeGonlOverlap) {
+					reason = FailReason.OVERLAPPING_INDEL;
+				} else {
+					mappingReportWriter.close();
+					throw new Exception("Probe " + snpName + " failed without defined reason. (This could be a bug in the software)");
+				}
+
+				failCounter.adjustOrPutValue(reason, 1, 1);
+				i = 0;
+				failedProbeEntry[i++] = snpName;
+				failedProbeEntry[i++] = reason.getReason();
+				failedProbesWriter.writeNext(failedProbeEntry);
+
 			}
-
-
-
-
 		}
 
 		mappingReportWriter.close();
 		passedProbesWriter.close();
+
+		for (String probe : probesInManifestNotMapped) {
+
+			failCounter.adjustOrPutValue(FailReason.NO_MAPPING, 1, 1);
+			i = 0;
+			failedProbeEntry[i++] = probe;
+			failedProbeEntry[i++] = FailReason.NO_MAPPING.getReason();
+			failedProbesWriter.writeNext(failedProbeEntry);
+
+		}
+
+		failedProbesWriter.close();
+
+		System.out.println(
+				"Failed probe summary:");
+		for (FailReason failedReason : FailReason.values()) {
+			System.out.println(" - " + failedReason.getReason() + ": " + failCounter.get(failedReason));
+		}
+
 		System.out.println("Done");
 
 	}
@@ -700,6 +807,10 @@ public class IlluminaProbeRemapping {
 		}
 
 		return new Clipping(clippingLeft, clippingRight);
+
+
+
+
 
 	}
 
@@ -751,6 +862,10 @@ public class IlluminaProbeRemapping {
 			default:
 				throw new Exception("Unexpected allele: " + n);
 
+
+
+
+
 		}
 
 	}
@@ -766,6 +881,11 @@ public class IlluminaProbeRemapping {
 		public IlluminaProbeInfo(String SNP, String SourceSeq) {
 
 			if (SNP.equals("[N/A]")) {
+				a1 = '\0';
+				a2 = '\0';
+				a1_b = "";
+				a2_b = "";
+			} else if (SNP.equals("")) {
 				a1 = '\0';
 				a2 = '\0';
 				a1_b = "";
@@ -806,11 +926,10 @@ public class IlluminaProbeRemapping {
 		private boolean isSnpAllele(char a) {
 			return a == 'A' || a == 'T' || a == 'G' || a == 'C';
 		}
-		
-		private boolean hasNoAlleles(){
+
+		private boolean hasNoAlleles() {
 			return a1 == '\0' || a2 == '\0';
 		}
-		
 	}
 
 	private static enum ParB37 {
@@ -864,6 +983,28 @@ public class IlluminaProbeRemapping {
 
 			return startX + posY - startY;
 
+		}
+	}
+
+	private static enum FailReason {
+
+		NO_MAPPING("Not mapped"),
+		MULTIPLE_MAPPING("Mapped to multiple locations"),
+		MISMATCH_TO_REFERENCE_IN_END("Missmatch in probe end"),
+		OVERLAPPING_INDEL("Indel / rearrangement overlapping variant MAF >= 1%"),
+		NO_VAR_REFERENCE("Variant not found in reference"),
+		NOT_BIALLELIC_REFERENCE("Variant is not biallelic"),
+		VARIATION_PROBE_END("Reference variants in probe end MAF >= 1%"),
+		ILLUMINA_EXCLUDED("Not variant in Illumina manifest"),
+		INCONSISTENT_ALLELES("Unexpected alleles in reference");
+		private final String reason;
+
+		FailReason(String reason) {
+			this.reason = reason;
+		}
+
+		public String getReason() {
+			return reason;
 		}
 	}
 }
