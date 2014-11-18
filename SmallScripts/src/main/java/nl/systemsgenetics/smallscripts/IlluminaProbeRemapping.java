@@ -30,18 +30,18 @@ public class IlluminaProbeRemapping {
 
 	public static void main(String[] args) throws Exception {
 
-		File samFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\ImmunoProbes.sam");
-		File illuminaMappingFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\Immuno_BeadChip_11419691_B.csv");
-		String outputPrefix = "D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\ImmunoProbes";
+//		File samFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\ImmunoProbes_gapped.sam");
+//		File illuminaMappingFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\Immuno_BeadChip_11419691_B.csv");
+//		String outputPrefix = "D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\ImmunoProbes_gapped";
 
 
-//		File samFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\CytoSNP-12v2.1Probes.sam");
+//		File samFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\CytoSNP-12v2.1Probes_gapped.sam");
 //		File illuminaMappingFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\HumanCytoSNP-12v2-1_L.csv");
-//		String outputPrefix = "D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\CytoSNP-12v2.1Probes";
+//		String outputPrefix = "D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\CytoSNP-12v2.1Probes_gapped";
 
-//		File samFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\CytoSNP-12v2Probes.sam");
-//		File illuminaMappingFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\HumanCytoSNP-12v2_H.csv");
-//		String outputPrefix = "D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\CytoSNP-12v2Probes";
+		File samFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\CytoSNP-12v2Probes_gapped.sam");
+		File illuminaMappingFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\HumanCytoSNP-12v2_H.csv");
+		String outputPrefix = "D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\CytoSNP-12v2Probes_gapped";
 
 		File referenceGenomeFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\human_g1k_v37.fasta");
 
@@ -113,7 +113,7 @@ public class IlluminaProbeRemapping {
 
 		CSVWriter mappingReportWriter = new CSVWriter(new FileWriter(mappingReportFile), '\t', CSVWriter.NO_QUOTE_CHARACTER);
 
-		final String[] mappingReportEntry = new String[49];
+		final String[] mappingReportEntry = new String[48];
 		int i = 0;
 		mappingReportEntry[i++] = "SNP";
 		mappingReportEntry[i++] = "Chr";
@@ -123,7 +123,6 @@ public class IlluminaProbeRemapping {
 		mappingReportEntry[i++] = "Strand";
 		mappingReportEntry[i++] = "ProbeLength";
 		mappingReportEntry[i++] = "Cigar";
-		mappingReportEntry[i++] = "UnexpectedCigarOpperator";
 		mappingReportEntry[i++] = "ClippingLeft";
 		mappingReportEntry[i++] = "ClippingRight";
 		mappingReportEntry[i++] = "EditDistance";
@@ -214,12 +213,12 @@ public class IlluminaProbeRemapping {
 
 			Clipping clipping = getClipping(cigar);
 
-			boolean unexpectedCigarOperator = false;
-			for (CigarElement cigarElement : cigar.getCigarElements()) {
-				if (cigarElement.getOperator() != CigarOperator.M && cigarElement.getOperator() != CigarOperator.S) {
-					unexpectedCigarOperator = true;
-				}
-			}
+//			boolean unexpectedCigarOperator = false;
+//			for (CigarElement cigarElement : cigar.getCigarElements()) {
+//				if (cigarElement.getOperator() != CigarOperator.M && cigarElement.getOperator() != CigarOperator.S) {
+//					unexpectedCigarOperator = true;
+//				}
+//			}
 
 			clippingAtSnp = (clipping.getClippingLeft() > 0 && reverseStrand) || (clipping.getClippingRight() > 0 && !reverseStrand);
 
@@ -653,7 +652,6 @@ public class IlluminaProbeRemapping {
 			mappingReportEntry[i++] = reverseStrand ? "-" : "+";
 			mappingReportEntry[i++] = Integer.toString(probeLength);
 			mappingReportEntry[i++] = record.getCigarString();
-			mappingReportEntry[i++] = Boolean.toString(unexpectedCigarOperator);
 			mappingReportEntry[i++] = Integer.toString(clipping.getClippingLeft());
 			mappingReportEntry[i++] = Integer.toString(clipping.getClippingRight());
 			mappingReportEntry[i++] = Integer.toString(nm);
