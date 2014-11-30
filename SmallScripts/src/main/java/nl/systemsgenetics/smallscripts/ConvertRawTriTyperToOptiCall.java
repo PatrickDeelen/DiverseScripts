@@ -113,6 +113,11 @@ public class ConvertRawTriTyperToOptiCall {
 			for (Integer pos : snps.getChrPositions(chr)) {
 
 				String snp = snps.get(chr, pos);
+				
+				if(!allSNPHash.containsKey(snp)){
+					throw new Exception("SNP without data");
+				}
+				
 				int snpI = allSNPHash.get(snp);
 
 				outputWriter.write(snp);
