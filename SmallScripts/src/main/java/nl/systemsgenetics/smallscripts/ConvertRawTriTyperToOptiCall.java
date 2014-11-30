@@ -33,7 +33,7 @@ public class ConvertRawTriTyperToOptiCall {
 		System.out.println("TriTyper: " + trityperFolderPath);
 		System.out.println("SNP info: " + snpInfoFilePath);
 		System.out.println("Output folder: " + outputFolderPath);
-		System.out.println("Sample filter file: " + outputFolderPath);
+		System.out.println("Sample filter file: " + sampleFilterFilePath);
 
 		File trityperFolder = new File(trityperFolderPath);
 		File outputFolder = new File(outputFolderPath);
@@ -80,17 +80,26 @@ public class ConvertRawTriTyperToOptiCall {
 		sampleFileReader.close();
 
 		final boolean[] sampleIncluded = new boolean[samples.size()];
+		int samplesIncluded = 0;
 		if (includedSamples == null) {
 			//All are included
 			for (int j = 0; j < sampleIncluded.length; ++j) {
+				++samplesIncluded;
 				sampleIncluded[j] = true;
 			}
 		} else {
 			for (int j = 0; j < sampleIncluded.length; ++j) {
-				sampleIncluded[j] = includedSamples.contains(samples.get(j));
+				boolean included = includedSamples.contains(samples.get(j));
+				if(included){
+					++samplesIncluded;
+					sampleIncluded[j] = true;
+				}
+				
 			}
 		}
 
+		System.out.println("Included samples: " + samplesIncluded);
+		
 		BufferedReader snpInfoFileReader = new BufferedReader(new FileReader(snpInfoFilePath));
 		String[] snpInfo;
 		while ((line = snpInfoFileReader.readLine()) != null) {
@@ -127,21 +136,21 @@ public class ConvertRawTriTyperToOptiCall {
 
 			outputWriter.append("SNP\tCoor\tAlleles");
 
-			int j = 0;
-			for (String sample : samples) {
+			
+			for (int sampleI = 0; sampleI < samples.size(); ++sampleI) {
 
-				if (!sampleIncluded[j]) {
+				if (!sampleIncluded[sampleI]) {
 					continue;
 				}
 
 				outputWriter.append('\t');
-				outputWriter.append(sample);
+				outputWriter.append(samples.get(sampleI));
 				outputWriter.append('A');
 				outputWriter.append('\t');
-				outputWriter.append(sample);
+				outputWriter.append(samples.get(sampleI));
 				outputWriter.append('B');
 				
-				++j;
+				
 			}
 
 			outputWriter.write('\n');
@@ -191,6 +200,8 @@ public class ConvertRawTriTyperToOptiCall {
 
 			outputWriter.close();
 		}
+		
+		System.out.println("Done");
 
 	}
 }
