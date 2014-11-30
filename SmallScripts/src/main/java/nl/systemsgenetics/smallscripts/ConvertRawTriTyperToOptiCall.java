@@ -8,6 +8,7 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import org.apache.commons.lang3.StringUtils;
 import org.molgenis.genotype.GenotypeDataException;
 import umcg.genetica.collections.ChrPosTreeMap;
@@ -27,10 +28,12 @@ public class ConvertRawTriTyperToOptiCall {
 		String trityperFolderPath = args[0];
 		String snpInfoFilePath = args[1];
 		String outputFolderPath = args[2];
+		String sampleFilterFilePath = args.length > 3 ? args[3] : null;
 
 		System.out.println("TriTyper: " + trityperFolderPath);
 		System.out.println("SNP info: " + snpInfoFilePath);
 		System.out.println("Output folder: " + outputFolderPath);
+		System.out.println("Sample filter file: " + outputFolderPath);
 
 		File trityperFolder = new File(trityperFolderPath);
 		File outputFolder = new File(outputFolderPath);
@@ -55,12 +58,38 @@ public class ConvertRawTriTyperToOptiCall {
 		}
 		snpFileReader.close();
 
+		final HashSet<String> includedSamples;
+		if (sampleFilterFilePath == null) {
+			includedSamples = null;
+		} else {
+			includedSamples = new HashSet<String>();
+			File sampleFilterFile = new File(sampleFilterFilePath);
+
+			BufferedReader sampleFilterFileReader = new BufferedReader(new FileReader(sampleFilterFile));
+			while ((line = sampleFilterFileReader.readLine()) != null) {
+				includedSamples.add(line);
+			}
+			sampleFilterFileReader.close();
+		}
+
 
 		BufferedReader sampleFileReader = new BufferedReader(new FileReader(sampleFile));
 		while ((line = sampleFileReader.readLine()) != null) {
 			samples.add(line);
 		}
 		sampleFileReader.close();
+
+		final boolean[] sampleIncluded = new boolean[samples.size()];
+		if (includedSamples == null) {
+			//All are included
+			for (int j = 0; j < sampleIncluded.length; ++j) {
+				sampleIncluded[j] = true;
+			}
+		} else {
+			for (int j = 0; j < sampleIncluded.length; ++j) {
+				sampleIncluded[j] = includedSamples.contains(samples.get(j));
+			}
+		}
 
 		BufferedReader snpInfoFileReader = new BufferedReader(new FileReader(snpInfoFilePath));
 		String[] snpInfo;
@@ -98,13 +127,21 @@ public class ConvertRawTriTyperToOptiCall {
 
 			outputWriter.append("SNP\tCoor\tAlleles");
 
+			int j = 0;
 			for (String sample : samples) {
+
+				if (!sampleIncluded[j]) {
+					continue;
+				}
+
 				outputWriter.append('\t');
 				outputWriter.append(sample);
 				outputWriter.append('A');
 				outputWriter.append('\t');
 				outputWriter.append(sample);
 				outputWriter.append('B');
+				
+				++j;
 			}
 
 			outputWriter.write('\n');
@@ -113,11 +150,11 @@ public class ConvertRawTriTyperToOptiCall {
 			for (Integer pos : snps.getChrPositions(chr)) {
 
 				String snp = snps.get(chr, pos);
-				
-				if(!allSNPHash.containsKey(snp)){
+
+				if (!allSNPHash.containsKey(snp)) {
 					throw new Exception("SNP without data");
 				}
-				
+
 				int snpI = allSNPHash.get(snp);
 
 				outputWriter.write(snp);
@@ -128,6 +165,11 @@ public class ConvertRawTriTyperToOptiCall {
 
 
 				for (int sampleI = 0; sampleI < samples.size(); ++sampleI) {
+
+					if (!sampleIncluded[sampleI]) {
+						continue;
+					}
+
 					byte rByte = rawdata.getR(snpI, sampleI);
 					byte thetaByte = rawdata.getTheta(snpI, sampleI);
 
