@@ -3,15 +3,12 @@ package nl.systemsgenetics.smallscripts;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
-import java.io.FilterWriter;
-import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.Random;
 import org.molgenis.genotype.RandomAccessGenotypeData;
 import org.molgenis.genotype.RandomAccessGenotypeDataReaderFormats;
 import org.molgenis.genotype.variant.GeneticVariant;
 import umcg.genetica.io.trityper.EQTL;
-import umcg.genetica.io.trityper.eQTLTextFile;
+import umcg.genetica.io.trityper.QTLTextFile;
 
 /**
  *
@@ -33,7 +30,7 @@ public class FindEqtlMatchedRandom {
 		double r2Diff = Double.parseDouble(args[5]);
 
 
-		eQTLTextFile eQTLsTextFile = new eQTLTextFile(args[0], false);
+		QTLTextFile eQTLsTextFile = new QTLTextFile(args[0], false);
 		RandomAccessGenotypeData genotypes = RandomAccessGenotypeDataReaderFormats.VCF_FOLDER.createFilteredGenotypeData(args[1], 1000, null, null);
 
 		BufferedWriter writer = new BufferedWriter(new FileWriter(new File(args[2])));

@@ -17,7 +17,7 @@ import java.util.regex.Pattern;
 import org.apache.commons.lang3.StringUtils;
 
 /**
- * Hello world!
+ * 
  *
  */
 public class Main {
@@ -94,7 +94,6 @@ public class Main {
 
 		int excludedNaSnps = 0;
 		int excludedInvalidSnps = 0;
-		int includedVar = 0;
 
 		String currentSample = "";
 
