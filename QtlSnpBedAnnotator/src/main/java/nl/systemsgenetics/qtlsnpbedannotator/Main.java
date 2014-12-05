@@ -16,7 +16,7 @@ import org.apache.commons.cli.PosixParser;
 import umcg.genetica.io.bed.BedEntry;
 import umcg.genetica.io.bed.BedFile;
 import umcg.genetica.io.trityper.EQTL;
-import umcg.genetica.io.trityper.eQTLTextFile;
+import umcg.genetica.io.trityper.QTLTextFile;
 
 /**
  * Hello world!
@@ -130,7 +130,7 @@ public class Main {
 		}
 		writer.append('\n');
 
-		eQTLTextFile eQTLsTextFile = new eQTLTextFile(qtlFile.getAbsolutePath(), false);
+		QTLTextFile eQTLsTextFile = new QTLTextFile(qtlFile.getAbsolutePath(), false);
 
 		for (Iterator<EQTL> eQtlIt = eQTLsTextFile.getEQtlIterator(); eQtlIt.hasNext();) {
 
