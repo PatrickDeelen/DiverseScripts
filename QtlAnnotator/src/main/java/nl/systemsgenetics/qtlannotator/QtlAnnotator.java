@@ -7,6 +7,7 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Iterator;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.HelpFormatter;
@@ -22,10 +23,6 @@ import umcg.genetica.collections.ChrPosMap;
 import umcg.genetica.io.trityper.EQTL;
 import umcg.genetica.io.trityper.QTLTextFile;
 
-/**
- * Hello world!
- *
- */
 public class QtlAnnotator {
 
 	private static final Options OPTIONS;
@@ -158,7 +155,7 @@ public class QtlAnnotator {
 
 
 
-		ChrPosMap<String[]> annotationMap = new ChrPosMap<String[]>();
+		ChrPosMap<HashSet<String>[]> annotationMap = new ChrPosMap<HashSet<String>[]>();
 		CSVReader reader = new CSVReader(new FileReader(annotationFile));
 		String[] nextLine = reader.readNext();
 
@@ -174,7 +171,21 @@ public class QtlAnnotator {
 			if (nextLine.length != annotatationNames.length + 2) {
 				throw new Exception("Error in annotation different number of columns then headers on line: " + Arrays.toString(nextLine));
 			}
-			annotationMap.put(nextLine[1], Integer.valueOf(nextLine[2]), Arrays.copyOfRange(nextLine, 2, nextLine.length));
+
+			int pos = Integer.valueOf(nextLine[2]);
+			HashSet<String>[] currentAnnotationPos = annotationMap.get(nextLine[1], pos);
+			if (currentAnnotationPos == null) {
+				currentAnnotationPos = new HashSet[annotatationNames.length];
+				for (int i = 0; i < currentAnnotationPos.length; ++i) {
+					currentAnnotationPos[i] = new HashSet<String>(1);
+				}
+				annotationMap.put(nextLine[1], pos, currentAnnotationPos);
+			}
+			for (int i = 0; i < currentAnnotationPos.length; ++i) {
+				currentAnnotationPos[i].add(nextLine[i + 2]);
+			}
+
+
 		}
 		reader.close();
 
@@ -182,24 +193,24 @@ public class QtlAnnotator {
 
 		QTLTextFile eQTLsTextFile = new QTLTextFile(qtlFile.getAbsolutePath(), false);
 
-		
+
 
 		CSVWriter mappingReportWriter = new CSVWriter(new FileWriter(outputFile), '\t', CSVWriter.NO_QUOTE_CHARACTER);
-		
+
 		final String[] qtlAnnotatedOutput = new String[5 + annotatationNames.length];
 		int c = 0;
 		qtlAnnotatedOutput[c++] = "p-value";
 		qtlAnnotatedOutput[c++] = "variant";
 		qtlAnnotatedOutput[c++] = "chr";
 		qtlAnnotatedOutput[c++] = "pos";
-		
-		for(String annotationName : annotatationNames){
+
+		for (String annotationName : annotatationNames) {
 			qtlAnnotatedOutput[c++] = annotationName;
 		}
 		mappingReportWriter.writeNext(qtlAnnotatedOutput);
-		
+
 		final StringBuilder[] qtlAnnotations = new StringBuilder[annotatationNames.length];
-		
+
 		qtls:
 		for (Iterator<EQTL> eQtlIt = eQTLsTextFile.getEQtlIterator(); eQtlIt.hasNext();) {
 
@@ -208,11 +219,11 @@ public class QtlAnnotator {
 			int pos = eQtl.getRsChrPos();
 
 			for (int i = 0; i < annotatationNames.length; ++i) {
-				String[] annotation = annotationMap.get(chr, pos);
+				HashSet<String>[] annotation = annotationMap.get(chr, pos);
 				if (annotation == null) {
 					qtlAnnotations[i] = new StringBuilder();
 				} else {
-					qtlAnnotations[i] = new StringBuilder(annotation[i]);
+					qtlAnnotations[i] = annotationsToString(annotation[i]);
 				}
 
 			}
@@ -236,14 +247,14 @@ public class QtlAnnotator {
 						continue otherVariants;
 					}
 
-					String[] annotation = annotationMap.get(variant.getSequenceName(), variant.getStartPos());
+					HashSet<String>[] annotation = annotationMap.get(variant.getSequenceName(), variant.getStartPos());
 
 					if (annotation != null) {
 						for (int i = 0; i < annotatationNames.length; ++i) {
-							if(qtlAnnotations[i].length() != 0){
-								qtlAnnotations[i].append("; ");
+							if (qtlAnnotations[i].length() != 0) {
+								qtlAnnotations[i].append(';');
 							}
-							qtlAnnotations[i].append(annotation[i]);
+							qtlAnnotations[i].append(annotationsToString(annotation[i]));
 						}
 					}
 
@@ -257,17 +268,35 @@ public class QtlAnnotator {
 			qtlAnnotatedOutput[c++] = chr;
 			qtlAnnotatedOutput[c++] = String.valueOf(pos);
 
-			for(StringBuilder annotation : qtlAnnotations){
+			for (StringBuilder annotation : qtlAnnotations) {
 				qtlAnnotatedOutput[c++] = annotation.toString();
 			}
-			
+
 			mappingReportWriter.writeNext(qtlAnnotatedOutput);
-			
+
 		}
-		
+
 		mappingReportWriter.close();
-		
+
 		System.out.println("Annotation done");
 
+	}
+	
+	private static StringBuilder annotationsToString(HashSet<String> annotations){
+		
+		StringBuilder result = new StringBuilder();
+		
+		boolean first = true;
+		for(String annotation : annotations){
+			if(first){
+				first = false;
+			} else {
+				result.append(',');
+			}
+			result.append(annotation);
+		}
+		
+		return result;
+		
 	}
 }
