@@ -2,6 +2,7 @@ package nl.systemsgenetics.qtlannotator;
 
 import au.com.bytecode.opencsv.CSVReader;
 import au.com.bytecode.opencsv.CSVWriter;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
@@ -27,8 +28,20 @@ public class QtlAnnotator {
 
 	private static final Options OPTIONS;
 	private static final int DEFAULT_WINDOW = 250000;
-	private static final double DEFAULT_R2 = 0.9;
+	private static final double DEFAULT_R2 = 0.8;
 
+	private static final String HEADER =
+			"  /---------------------------------------\\\n"
+			+ "  |             QTL Annotator             |\n"
+			+ "  |                                       |\n"
+			+ "  |             Patrick Deelen            |\n"
+			+ "  |        patrickdeelen@gmail.com        |\n"
+			+ "  |                                       |\n"
+			+ "  |     Genomics Coordication Center      |\n"
+			+ "  |        Department of Genetics         |\n"
+			+ "  |  University Medical Center Groningen  |\n"
+			+ "  \\---------------------------------------/";
+	
 	static {
 
 		OPTIONS = new Options();
@@ -42,9 +55,8 @@ public class QtlAnnotator {
 
 		OptionBuilder.withArgName("path");
 		OptionBuilder.hasArg();
-		OptionBuilder.withDescription("Output file");
+		OptionBuilder.withDescription("Output file. If not set will be \"{qtlres}_annotated\" Will create {output}.txt and {output}_summary.txt");
 		OptionBuilder.withLongOpt("output");
-		OptionBuilder.isRequired();
 		OPTIONS.addOption(OptionBuilder.create('o'));
 
 		OptionBuilder.withArgName("basePath");
@@ -70,13 +82,13 @@ public class QtlAnnotator {
 
 		OptionBuilder.withArgName("int");
 		OptionBuilder.hasArg();
-		OptionBuilder.withDescription("Search window for LD SNPs");
+		OptionBuilder.withDescription("Search window for LD SNPs. Default: " + DEFAULT_WINDOW);
 		OptionBuilder.withLongOpt("window");
 		OPTIONS.addOption(OptionBuilder.create("w"));
 
 		OptionBuilder.withArgName("double");
 		OptionBuilder.hasArg();
-		OptionBuilder.withDescription("Minimum r2 to include annotation");
+		OptionBuilder.withDescription("Minimum r2 to include annotation. Default: " + DEFAULT_R2);
 		OPTIONS.addOption(OptionBuilder.create("r2"));
 
 		OptionBuilder.withArgName("path");
@@ -91,8 +103,17 @@ public class QtlAnnotator {
 	@SuppressWarnings("RedundantStringConstructorCall")
 	public static void main(String[] args) throws IOException, Exception {
 
+		System.out.println(HEADER);
+		System.out.println();
+		System.out.flush(); //flush to make sure header is before errors
+		try {
+			Thread.sleep(25); //Allows flush to complete
+		} catch (InterruptedException ex) {
+		}
+		
 		final File qtlFile;
 		final File outputFile;
+		final File outputFileSummary;
 		final File annotationFile;
 		final String genotypeDataType;
 		final String[] genotypeDataPaths;
@@ -103,7 +124,15 @@ public class QtlAnnotator {
 			final CommandLine commandLine = new PosixParser().parse(OPTIONS, args, false);
 
 			qtlFile = new File(commandLine.getOptionValue('q'));
-			outputFile = new File(commandLine.getOptionValue('o'));
+			
+			if (commandLine.hasOption("o")) {
+				outputFile = new File(commandLine.getOptionValue('o') + ".txt");
+				outputFileSummary = new File(commandLine.getOptionValue('o') + "_summary.txt");
+			} else {
+				outputFile = new File(qtlFile.getAbsolutePath() + "_annotated.txt");
+				outputFileSummary = new File(qtlFile.getAbsolutePath() + "_annotated_summary.txt");
+			}
+			
 			annotationFile = new File(commandLine.getOptionValue('a'));
 			genotypeDataType = commandLine.getOptionValue('G');
 			genotypeDataPaths = commandLine.getOptionValues('g');
@@ -129,9 +158,10 @@ public class QtlAnnotator {
 			return;
 		}
 
-		System.out.println("QTL file: " + qtlFile);
-		System.out.println("Annotion file: " + annotationFile);
-		System.out.println("Output file: " + outputFile);
+		System.out.println("QTL file: " + qtlFile.getAbsolutePath());
+		System.out.println("Annotion file: " + annotationFile.getAbsolutePath());
+		System.out.println("Output file: " + outputFile.getAbsolutePath());
+		System.out.println("Output summary: " + outputFileSummary.getAbsolutePath());
 		System.out.println("Genotype data: " + Arrays.toString(genotypeDataPaths));
 		System.out.println("Genotype data type: " + genotypeDataType);
 		System.out.println("Windows: " + window);
@@ -153,10 +183,11 @@ public class QtlAnnotator {
 		}
 
 
-
+		int numberOfAnnotations = 0;
+		int numberOfPosWithAnnotation = 0;
 
 		ChrPosMap<HashSet<String>[]> annotationMap = new ChrPosMap<HashSet<String>[]>();
-		CSVReader reader = new CSVReader(new FileReader(annotationFile));
+		CSVReader reader = new CSVReader(new FileReader(annotationFile), '\t', '\0');
 		String[] nextLine = reader.readNext();
 
 		if (nextLine.length < 3) {
@@ -171,15 +202,16 @@ public class QtlAnnotator {
 			if (nextLine.length != annotatationNames.length + 2) {
 				throw new Exception("Error in annotation different number of columns then headers on line: " + Arrays.toString(nextLine));
 			}
-
-			int pos = Integer.valueOf(nextLine[2]);
-			HashSet<String>[] currentAnnotationPos = annotationMap.get(nextLine[1], pos);
+			++numberOfAnnotations;
+			int pos = Integer.valueOf(nextLine[1]);
+			HashSet<String>[] currentAnnotationPos = annotationMap.get(nextLine[0], pos);
 			if (currentAnnotationPos == null) {
+				++numberOfPosWithAnnotation;
 				currentAnnotationPos = new HashSet[annotatationNames.length];
 				for (int i = 0; i < currentAnnotationPos.length; ++i) {
 					currentAnnotationPos[i] = new HashSet<String>(1);
 				}
-				annotationMap.put(nextLine[1], pos, currentAnnotationPos);
+				annotationMap.put(nextLine[0], pos, currentAnnotationPos);
 			}
 			for (int i = 0; i < currentAnnotationPos.length; ++i) {
 				currentAnnotationPos[i].add(nextLine[i + 2]);
@@ -193,7 +225,10 @@ public class QtlAnnotator {
 
 		QTLTextFile eQTLsTextFile = new QTLTextFile(qtlFile.getAbsolutePath(), false);
 
-
+		int numberOfQtls = 0;
+		int numberOfQtlsNotInRef = 0;
+		int numberOfQtlsWithAnnotation = 0;
+		int numberOfQtlsWithDirectAnnotation = 0;
 
 		CSVWriter mappingReportWriter = new CSVWriter(new FileWriter(outputFile), '\t', CSVWriter.NO_QUOTE_CHARACTER);
 
@@ -214,12 +249,19 @@ public class QtlAnnotator {
 		qtls:
 		for (Iterator<EQTL> eQtlIt = eQTLsTextFile.getEQtlIterator(); eQtlIt.hasNext();) {
 
+			++numberOfQtls;
+			
 			EQTL eQtl = eQtlIt.next();
 			String chr = eQtl.getRsChr() + "";
 			int pos = eQtl.getRsChrPos();
+			boolean annotated = false;
 
+			HashSet<String>[] annotation = annotationMap.get(chr, pos);
+			if (annotation != null) {
+				annotated = true;
+				++numberOfQtlsWithDirectAnnotation;
+			}
 			for (int i = 0; i < annotatationNames.length; ++i) {
-				HashSet<String>[] annotation = annotationMap.get(chr, pos);
 				if (annotation == null) {
 					qtlAnnotations[i] = new StringBuilder();
 				} else {
@@ -231,11 +273,12 @@ public class QtlAnnotator {
 			GeneticVariant qtlVariant = genotypeData.getSnpVariantByPos(chr, pos);
 
 			if (qtlVariant == null) {
+				++numberOfQtlsNotInRef;
 				System.err.println("ERROR: QTL variant " + eQtl.getRsName() + " not found in reference. Unable to search for variants in LD for this QTL.");
 			} else {
 
 				otherVariants:
-				for (GeneticVariant variant : genotypeData.getVariantsByRange(chr, pos - window, pos + window)) {
+				for (GeneticVariant variant : genotypeData.getVariantsByRange(chr, pos <= window ? 1 : pos - window, pos + window)) {
 
 					if (variant == qtlVariant) {
 						continue otherVariants;
@@ -247,9 +290,10 @@ public class QtlAnnotator {
 						continue otherVariants;
 					}
 
-					HashSet<String>[] annotation = annotationMap.get(variant.getSequenceName(), variant.getStartPos());
+					annotation = annotationMap.get(variant.getSequenceName(), variant.getStartPos());
 
 					if (annotation != null) {
+						annotated = true;
 						for (int i = 0; i < annotatationNames.length; ++i) {
 							if (qtlAnnotations[i].length() != 0) {
 								qtlAnnotations[i].append(';');
@@ -268,15 +312,52 @@ public class QtlAnnotator {
 			qtlAnnotatedOutput[c++] = chr;
 			qtlAnnotatedOutput[c++] = String.valueOf(pos);
 
-			for (StringBuilder annotation : qtlAnnotations) {
-				qtlAnnotatedOutput[c++] = annotation.toString();
+			for (StringBuilder annotationString : qtlAnnotations) {
+				qtlAnnotatedOutput[c++] = annotationString.toString();
 			}
 
 			mappingReportWriter.writeNext(qtlAnnotatedOutput);
+			
+			if(annotated){
+				++numberOfQtlsWithAnnotation;
+			}
 
 		}
 
 		mappingReportWriter.close();
+		
+		BufferedWriter outputWriter = new BufferedWriter(new FileWriter(outputFileSummary));
+		outputWriter.append("QTL file: " + qtlFile.getAbsolutePath());
+		outputWriter.append('\n');
+		outputWriter.append("Annotion file: " + annotationFile.getAbsolutePath());
+		outputWriter.append('\n');
+		outputWriter.append("Output file: " + outputFile.getAbsolutePath());
+		outputWriter.append('\n');
+		outputWriter.append("Output summary: " + outputFileSummary.getAbsolutePath());
+		outputWriter.append('\n');
+		outputWriter.append("Genotype data: " + Arrays.toString(genotypeDataPaths));
+		outputWriter.append('\n');
+		outputWriter.append("Genotype data type: " + genotypeDataType);
+		outputWriter.append('\n');
+		outputWriter.append("Windows: " + window);
+		outputWriter.append('\n');
+		outputWriter.append("r2: " + minR2);
+		outputWriter.append('\n');
+		
+		outputWriter.append('\n');
+		outputWriter.append("Number of loaded annotations: " + numberOfAnnotations);
+		outputWriter.append('\n');
+		outputWriter.append("Number of positions with annotation: " + numberOfPosWithAnnotation);
+		outputWriter.append('\n');
+		outputWriter.append("Total number of QTLs: " + numberOfQtls);
+		outputWriter.append('\n');
+		outputWriter.append("QTLs with annotation: " + numberOfQtlsWithAnnotation);
+		outputWriter.append('\n');
+		outputWriter.append("QTLs with direct annotation: " + numberOfQtlsWithDirectAnnotation);
+		outputWriter.append('\n');
+		outputWriter.append("QTLs with SNP not in reference: " + numberOfQtlsNotInRef);
+		outputWriter.append('\n');
+		outputWriter.close();
 
 		System.out.println("Annotation done");
 
