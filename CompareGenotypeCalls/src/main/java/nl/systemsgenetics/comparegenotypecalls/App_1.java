@@ -3,6 +3,7 @@ package nl.systemsgenetics.comparegenotypecalls;
 import gnu.trove.map.hash.TObjectIntHashMap;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.util.ArrayList;
@@ -11,6 +12,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.HelpFormatter;
+import org.apache.commons.cli.OptionBuilder;
+import org.apache.commons.cli.Options;
+import org.apache.commons.cli.ParseException;
+import org.apache.commons.cli.PosixParser;
 import org.apache.commons.math3.stat.regression.SimpleRegression;
 import org.molgenis.genotype.Allele;
 import org.molgenis.genotype.Alleles;
@@ -30,21 +37,163 @@ import org.molgenis.genotype.variantFilter.VariantQcChecker;
  */
 public class App_1 {
 
-	static Pattern TAB_PATTERN = Pattern.compile("\\t");
+	static final Pattern TAB_PATTERN = Pattern.compile("\\t");
+	static final String DEFAULT_CALL_P = "0.7";
+	
+	private static final Options OPTIONS;
+
+	private static final String HEADER =
+			"  /---------------------------------------\\\n"
+			+ "  |         Compare genotype calls        |\n"
+			+ "  |                                       |\n"
+			+ "  |             Patrick Deelen            |\n"
+			+ "  |        patrickdeelen@gmail.com        |\n"
+			+ "  |                                       |\n"
+			+ "  |     Genomics Coordication Center      |\n"
+			+ "  |        Department of Genetics         |\n"
+			+ "  |  University Medical Center Groningen  |\n"
+			+ "  \\---------------------------------------/";
+	
+	static {
+
+		OPTIONS = new Options();
+		
+		OptionBuilder.withArgName("basePath");
+		OptionBuilder.hasArgs();
+		OptionBuilder.withDescription("Gentoype data 1");
+		OptionBuilder.withLongOpt("data1");
+		OptionBuilder.isRequired();
+		OPTIONS.addOption(OptionBuilder.create("d1"));
+
+		OptionBuilder.withArgName("type");
+		OptionBuilder.hasArg();
+		OptionBuilder.withDescription("The input data 1 type.\n"
+				+ "* PED_MAP - plink PED MAP files.\n"
+				+ "* PLINK_BED - plink BED BIM FAM files.\n"
+				+ "* VCF - bgziped vcf with tabix index file\n"
+				+ "* VCFFOLDER - matches all bgziped vcf files + tabix index in a folder\n"
+				+ "* SHAPEIT2 - shapeit2 phased haplotypes .haps & .sample\n"
+				+ "* GEN - Oxford .gen & .sample\n"
+				+ "* TRITYPER - TriTyper format folder");
+		OptionBuilder.withLongOpt("data1Type");
+		OptionBuilder.isRequired();
+		OPTIONS.addOption(OptionBuilder.create("D1"));
+		
+		OptionBuilder.withArgName("basePath");
+		OptionBuilder.hasArgs();
+		OptionBuilder.withDescription("Gentoype data 2");
+		OptionBuilder.withLongOpt("data2");
+		OptionBuilder.isRequired();
+		OPTIONS.addOption(OptionBuilder.create("d2"));
+
+		OptionBuilder.withArgName("type");
+		OptionBuilder.hasArg();
+		OptionBuilder.withDescription("The input data 1 type.\n"
+				+ "* PED_MAP - plink PED MAP files.\n"
+				+ "* PLINK_BED - plink BED BIM FAM files.\n"
+				+ "* VCF - bgziped vcf with tabix index file\n"
+				+ "* VCFFOLDER - matches all bgziped vcf files + tabix index in a folder\n"
+				+ "* SHAPEIT2 - shapeit2 phased haplotypes .haps & .sample\n"
+				+ "* GEN - Oxford .gen & .sample\n"
+				+ "* TRITYPER - TriTyper format folder");
+		OptionBuilder.withLongOpt("data2Type");
+		OptionBuilder.isRequired();
+		OPTIONS.addOption(OptionBuilder.create("D2"));
+		
+		OptionBuilder.withArgName("basePath");
+		OptionBuilder.hasArgs();
+		OptionBuilder.withDescription("Output base path");
+		OptionBuilder.withLongOpt("output");
+		OptionBuilder.isRequired();
+		OPTIONS.addOption(OptionBuilder.create("o"));
+		
+		OptionBuilder.withArgName("path");
+		OptionBuilder.hasArgs();
+		OptionBuilder.withDescription("Sample ID mappings (data1Id\tdata2Id)");
+		OptionBuilder.withLongOpt("sampleMap");
+		OptionBuilder.isRequired();
+		OPTIONS.addOption(OptionBuilder.create("s"));
+		
+		OptionBuilder.withArgName("double");
+		OptionBuilder.hasArgs();
+		OptionBuilder.withDescription("Min posterior probability to make a call in data 1. Default: " + DEFAULT_CALL_P);
+		OptionBuilder.withLongOpt("prob1");
+		OPTIONS.addOption(OptionBuilder.create("p1"));
+		
+		OptionBuilder.withArgName("double");
+		OptionBuilder.hasArgs();
+		OptionBuilder.withDescription("Min posterior probability to make a call in data 2. Default: " + DEFAULT_CALL_P);
+		OptionBuilder.withLongOpt("prob2");
+		OPTIONS.addOption(OptionBuilder.create("p2"));
+		
+		OptionBuilder.withArgName("path");
+		OptionBuilder.hasArgs();
+		OptionBuilder.withDescription("Variant include filter file data 1");
+		OptionBuilder.withLongOpt("variantInclude");
+		OPTIONS.addOption(OptionBuilder.create("v"));
+		
+		OptionBuilder.withArgName("string");
+		OptionBuilder.hasArgs();
+		OptionBuilder.withDescription("Force chr");
+		OptionBuilder.withLongOpt("chr");
+		OPTIONS.addOption(OptionBuilder.create("c"));
+		
+		OptionBuilder.withArgName("double");
+		OptionBuilder.hasArgs();
+		OptionBuilder.withDescription("Maf filter data 2");
+		OptionBuilder.withLongOpt("maf2");
+		OPTIONS.addOption(OptionBuilder.create("m2"));
+		
+	}
+
 
 	public static void main(String[] args) throws Exception {
 
+		
+		System.out.println(HEADER);
+		System.out.println();
+		System.out.flush(); //flush to make sure header is before errors
+		try {
+			Thread.sleep(25); //Allows flush to complete
+		} catch (InterruptedException ex) {
+		}
+		
 
-		String data1Type = args[0];
-		String data1Path = args[1];
-		String data2Type = args[2];
-		String data2Path = args[3];
-		String idMapPath = args[4];
-		String outputFilePath = args[5];
-		String mafFilterData2 = args.length >= 7 ? args[6] : "0";
-		String snpIdFilterData1 = args.length >= 8 && !args[7].equals("null") ? args[7] : null;
-		String data1ProbCall = args.length == 9 ? args[8] : "0.4";
-		String forceChr = args.length == 10 ? args[9] : null;
+		final String data1Type;
+		final String data1Path;
+		final String data2Type;
+		final String data2Path;
+		final String idMapPath;
+		final String outputFilePath;
+		final String mafFilterData2;
+		final String snpIdFilterData1;
+		final String data1ProbCall;
+		final String data2ProbCall;
+		final String forceChr;
+		
+		try {
+			final CommandLine commandLine = new PosixParser().parse(OPTIONS, args, false);
+
+			data1Type = commandLine.getOptionValue("D1");
+			data1Path = commandLine.getOptionValue("d1");
+			data2Type = commandLine.getOptionValue("D2");
+			data2Path = commandLine.getOptionValue("d2");
+			idMapPath = commandLine.getOptionValue("s");
+			outputFilePath = commandLine.getOptionValue("o");
+			mafFilterData2 = commandLine.getOptionValue("m2", "0");
+			snpIdFilterData1 = commandLine.getOptionValue("v", null);
+			data1ProbCall = commandLine.getOptionValue("p1", DEFAULT_CALL_P);
+			data2ProbCall = commandLine.getOptionValue("p2", DEFAULT_CALL_P);
+			forceChr = commandLine.getOptionValue("c", null);
+
+		} catch (ParseException ex) {
+			System.err.println("Invalid command line arguments: ");
+			System.err.println(ex.getMessage());
+			System.err.println();
+			new HelpFormatter().printHelp(" ", OPTIONS);
+			System.exit(1);
+			return;
+		}
 
 		System.out.println("Data1 " + data1Type + " at " + data1Path);
 		System.out.println("Data2 " + data2Type + " at " + data2Path);
@@ -54,7 +203,8 @@ public class App_1 {
 		if (snpIdFilterData1 != null) {
 			System.out.println("SNP ID filter data 1: " + snpIdFilterData1);
 		}
-		System.out.println("Data 1+2 prob call: " + data1ProbCall);
+		System.out.println("Data 1 prob call: " + data1ProbCall);
+		System.out.println("Data 2 prob call: " + data2ProbCall);
 		if (forceChr != null) {
 			System.out.println("Force Chr: " + forceChr);
 		}
@@ -67,6 +217,9 @@ public class App_1 {
 			elements = TAB_PATTERN.split(line);
 			sampleIdMap.put(elements[0], elements[1]);
 		}
+		
+		SampleFilter data1SampleFilter = new SampleIdIncludeFilter(sampleIdMap.keySet());
+		SampleFilter data2SampleFilter = new SampleIdIncludeFilter(sampleIdMap.values());
 
 		VariantIdIncludeFilter snpIdFilter = null;
 		if (snpIdFilterData1 != null) {
@@ -79,19 +232,21 @@ public class App_1 {
 		}
 
 
-		SampleFilter data1SampleFilter = new SampleIdIncludeFilter(sampleIdMap.keySet());
-		SampleFilter data2SampleFilter = new SampleIdIncludeFilter(sampleIdMap.values());
+		
+		
 
 
 
-		RandomAccessGenotypeData data1 = RandomAccessGenotypeDataReaderFormats.valueOf(data1Type.toUpperCase()).createFilteredGenotypeData(data1Path, 1024, snpIdFilter, data1SampleFilter, forceChr, Double.parseDouble(data1ProbCall));
+		RandomAccessGenotypeData data1 = RandomAccessGenotypeDataReaderFormats.valueOfSmart(data1Type.toUpperCase()).createFilteredGenotypeData(data1Path, 1024, snpIdFilter, data1SampleFilter, forceChr, Double.parseDouble(data1ProbCall));
 
 		VariantFilterSeqPos seqPosFilter = new VariantFilterSeqPos();
 		for (GeneticVariant data1Var : data1) {
 			seqPosFilter.addSeqPos(data1Var);
 		}
 
-		RandomAccessGenotypeData data2 = RandomAccessGenotypeDataReaderFormats.valueOf(data2Type.toUpperCase()).createFilteredGenotypeData(data2Path, 1024, seqPosFilter, data2SampleFilter, forceChr, Double.parseDouble(data1ProbCall));
+		
+		
+		RandomAccessGenotypeData data2 = RandomAccessGenotypeDataReaderFormats.valueOfSmart(data2Type.toUpperCase()).createFilteredGenotypeData(data2Path, 1024, seqPosFilter, data2SampleFilter, forceChr, Double.parseDouble(data2ProbCall));
 
 		//Do here to optimize trityper 
 		data2 = new VariantFilterableGenotypeDataDecorator(data2, new VariantQcChecker(Float.valueOf(mafFilterData2), 0, 0));
@@ -265,7 +420,7 @@ public class App_1 {
 		System.out.println("Number of SNPs compared: " + comparedVar);
 		System.out.println("Skipped vars due to incosistant alleles: " + skippedVar);
 
-		BufferedWriter out = new BufferedWriter(new FileWriter(outputFilePath));
+		BufferedWriter out = new BufferedWriter(new FileWriter(outputFilePath + ".sample"));
 
 		out.append("sample");
 		out.append('\t');

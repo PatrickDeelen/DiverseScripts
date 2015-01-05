@@ -7,13 +7,24 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.FileWriter;
+import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.UnsupportedEncodingException;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.HelpFormatter;
+import org.apache.commons.cli.OptionBuilder;
+import org.apache.commons.cli.Options;
+import org.apache.commons.cli.ParseException;
+import org.apache.commons.cli.PosixParser;
 import org.apache.commons.lang3.StringUtils;
 
 /**
@@ -25,6 +36,46 @@ public class Main {
 	private static final Pattern SAMPLE_COUNT_PATTERN = Pattern.compile("Total Samples\\s+(\\d+)");
 	private static final Pattern SNP_COUNT_PATTERN = Pattern.compile("Total SNPs\\s+(\\d+)");
 
+	private static final Options OPTIONS;
+
+	static {
+
+		OPTIONS = new Options();
+
+		OptionBuilder.withArgName("path");
+		OptionBuilder.hasArg();
+		OptionBuilder.withDescription("Final report file");
+		OptionBuilder.withLongOpt("report");
+		OptionBuilder.isRequired();
+		OPTIONS.addOption(OptionBuilder.create('r'));
+
+		OptionBuilder.withArgName("path");
+		OptionBuilder.hasArg();
+		OptionBuilder.withDescription("Output folder");
+		OptionBuilder.withLongOpt("output");
+		OptionBuilder.isRequired();
+		OPTIONS.addOption(OptionBuilder.create('o'));
+
+		OptionBuilder.withArgName("path");
+		OptionBuilder.hasArg();
+		OptionBuilder.withDescription("Probe update file, optional");
+		OptionBuilder.withLongOpt("probe");
+		OPTIONS.addOption(OptionBuilder.create('p'));
+
+		OptionBuilder.withArgName("path");
+		OptionBuilder.hasArg();
+		OptionBuilder.withDescription("Samples to include, optional");
+		OptionBuilder.withLongOpt("samples");
+		OPTIONS.addOption(OptionBuilder.create('s'));
+		
+		OptionBuilder.withArgName("path");
+		OptionBuilder.hasArg();
+		OptionBuilder.withDescription("Variants to include, optional");
+		OptionBuilder.withLongOpt("variants");
+		OPTIONS.addOption(OptionBuilder.create('v'));
+		
+	}
+	
 	@SuppressWarnings("RedundantStringConstructorCall")
 	public static void main(String[] args) throws Exception {
 
@@ -35,20 +86,54 @@ public class Main {
 		int allelesColumn = 22;
 		int aSignalColumn = 29;
 		int bSignalColumn = 30;
+		
+		final File finalReportFile;
+		final File outputFolder;
+		final File probeUpdateFile;
+		final File sampleIncludeFile;
+		final File variantIncludeFile;
+		
+		try {
+			final CommandLine commandLine = new PosixParser().parse(OPTIONS, args, false);
 
-		System.out.println("Input file: " + args[0]);
-		System.out.println("Output folder: " + args[1]);
+			finalReportFile = new File(commandLine.getOptionValue('r'));
+			outputFolder = new File(commandLine.getOptionValue('o'));
+			
+			if(commandLine.hasOption('p')){
+				probeUpdateFile = new File(commandLine.getOptionValue('p'));
+			} else {
+				probeUpdateFile = null;
+			}
+			
+			if(commandLine.hasOption('s')){
+				sampleIncludeFile = new File(commandLine.getOptionValue('s'));
+			} else {
+				sampleIncludeFile = null;
+			}
+			
+			if(commandLine.hasOption('v')){
+				variantIncludeFile = new File(commandLine.getOptionValue('v'));
+			} else {
+				variantIncludeFile = null;
+			}
+			
 
-		final File updateFile;
-		if (args.length > 2) {
-			System.out.println("Probe update file: " + args[2]);
-			updateFile = new File(args[2]);
-		} else {
-			updateFile = null;
+		} catch (ParseException ex) {
+			System.err.println("Invalid command line arguments: ");
+			System.err.println(ex.getMessage());
+			System.err.println();
+			new HelpFormatter().printHelp(" ", OPTIONS);
+			System.exit(1);
+			return;
 		}
 
+		System.out.println("Input file: " + finalReportFile.getAbsolutePath());
+		System.out.println("Output folder: " + outputFolder.getAbsolutePath());
 
-		File outputFolder = new File(args[1]);
+		if (probeUpdateFile != null) {
+			System.out.println("Probe update file: " + probeUpdateFile.getAbsolutePath());
+		}
+
 		if (!outputFolder.isDirectory()) {
 			if (!outputFolder.mkdirs()) {
 				throw new Exception("Cannot create output dir");
@@ -60,10 +145,10 @@ public class Main {
 		}
 
 		final HashMap<String, UpdatedProbeInfo> probeUpdates;
-		if (updateFile != null) {
+		if (probeUpdateFile != null) {
 			probeUpdates = new HashMap<String, UpdatedProbeInfo>();
 
-			CSVReader reader = new CSVReader(new FileReader(updateFile), '\t', '\0', 1);
+			CSVReader reader = new CSVReader(new FileReader(probeUpdateFile), '\t', '\0', 1);
 			String[] nextLine;
 			while ((nextLine = reader.readNext()) != null) {
 
@@ -73,9 +158,25 @@ public class Main {
 		} else {
 			probeUpdates = null;
 		}
-
-
-		BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(args[0]), "UTF-8"));
+		
+		final Set<String> sampleIncludeSet;
+		if(sampleIncludeFile != null){
+			sampleIncludeSet = readFilter(sampleIncludeFile);
+		} else {
+			sampleIncludeSet = null;
+		}
+		
+		final Set<String> variantIncludeSet;
+		if(variantIncludeFile != null){
+			variantIncludeSet = readFilter(variantIncludeFile);
+		} else {
+			variantIncludeSet = null;
+		}
+		
+		final HashSet<String> excludedSamplesByIncludeList = new HashSet<String>();
+		final HashSet<String> excludedVariantsByIncludeList = new HashSet<String>();
+		
+		BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(finalReportFile), "UTF-8"));
 
 		String line;
 
@@ -97,6 +198,7 @@ public class Main {
 
 		String currentSample = "";
 
+		finalReportLines:
 		while ((line = reader.readLine()) != null) {
 
 			if (inHeader) {
@@ -142,11 +244,22 @@ public class Main {
 
 				String[] elements = StringUtils.splitPreserveAllTokens(line, '\t');
 
-				final String varId = elements[rsColumn];;
+				final String varId = elements[rsColumn];
 				final String chr;
 				final int pos;
 				final char a;
 				final char b;
+				final String sampleId = elements[sampleColumn];
+				
+				if(sampleIncludeSet != null && !sampleIncludeSet.contains(sampleId)){
+					excludedSamplesByIncludeList.add(sampleId);
+					continue finalReportLines;
+				}
+				
+				if(variantIncludeSet != null && !variantIncludeSet.contains(varId)){
+					excludedVariantsByIncludeList.add(varId);
+					continue finalReportLines;
+				}
 
 				if (probeUpdates == null) {
 
@@ -154,13 +267,13 @@ public class Main {
 
 					if (alleles.equals("[N/A]")) {
 						++excludedNaSnps;
-						continue;
+						continue finalReportLines;
 					}
 
 					if (alleles.length() != 5) {
 						++excludedInvalidSnps;
 						System.err.println("Illegal SNP alleles: " + alleles);
-						continue;
+						continue finalReportLines;
 					}
 
 					chr = elements[chrColumn];
@@ -185,12 +298,12 @@ public class Main {
 
 
 
-				if (!elements[sampleColumn].equals(currentSample)) {
-					if (samples.contains(elements[sampleColumn])) {
+				if (!sampleId.equals(currentSample)) {
+					if (samples.contains(sampleId)) {
 						throw new Exception("Sample order problem");
 					}
-					samples.add(new String(elements[sampleColumn]));
-					currentSample = elements[sampleColumn];
+					samples.add(new String(sampleId));
+					currentSample = sampleId;
 				}
 
 				TreeMap<Integer, StringBuilder> outputDataChr;
@@ -228,7 +341,13 @@ public class Main {
 			System.out.println("Excluded invalid alleles SNPs: " + excludedInvalidSnps);
 		}
 		
+		if(sampleIncludeSet != null){
+			System.out.println("Excluded samples by include list: " + excludedSamplesByIncludeList.size());
+		}
 		
+		if(variantIncludeSet != null){
+			System.out.println("Excluded variants by include list: " + excludedVariantsByIncludeList.size());
+		}
 
 		StringBuilder header = new StringBuilder("SNP\tCoor\tAlleles");
 		for (String sample : samples) {
@@ -266,4 +385,21 @@ public class Main {
 		System.out.println("Included probes: " + varCount);
 
 	}
+	
+	private static Set<String> readFilter(File filterFile) throws UnsupportedEncodingException, IOException{
+		
+		HashSet<String> filter = new HashSet<String>();
+		
+		BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(filterFile), "UTF-8"));
+		
+		String line;
+		
+		while ((line = reader.readLine()) != null) {
+			filter.add(line);
+		}
+		
+		return Collections.unmodifiableSet(filter);
+		
+	}
+	
 }
