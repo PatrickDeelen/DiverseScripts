@@ -38,6 +38,7 @@ public class App_1 {
 
 	static final Pattern TAB_PATTERN = Pattern.compile("\\t");
 	static final String DEFAULT_CALL_P = "0.7";
+        static final String DEFAULT_ALLELECOMPLEMENT = "false";
 	
 	private static final Options OPTIONS;
 
@@ -144,6 +145,12 @@ public class App_1 {
 		OptionBuilder.withDescription("Maf filter data 2");
 		OptionBuilder.withLongOpt("maf2");
 		OPTIONS.addOption(OptionBuilder.create("m2"));
+                
+                OptionBuilder.withArgName("boolean");
+		OptionBuilder.hasArg();
+		OptionBuilder.withDescription("Check for swapped Alleles true / false Default: " + DEFAULT_ALLELECOMPLEMENT);
+		OptionBuilder.withLongOpt("alleleComplement");
+		OPTIONS.addOption(OptionBuilder.create("ac"));
 		
 	}
 
@@ -171,6 +178,7 @@ public class App_1 {
 		final String data1ProbCall;
 		final String data2ProbCall;
 		final String forceChr;
+                final String alleleComp;
 		
 		try {
 			final CommandLine commandLine = new PosixParser().parse(OPTIONS, args, false);
@@ -186,6 +194,7 @@ public class App_1 {
 			data1ProbCall = commandLine.getOptionValue("p1", DEFAULT_CALL_P);
 			data2ProbCall = commandLine.getOptionValue("p2", DEFAULT_CALL_P);
 			forceChr = commandLine.getOptionValue("c", null);
+                        alleleComp = commandLine.getOptionValue("ac", DEFAULT_ALLELECOMPLEMENT);
 
 		} catch (ParseException ex) {
 			System.err.println("Invalid command line arguments: ");
@@ -209,6 +218,7 @@ public class App_1 {
 		if (forceChr != null) {
 			System.out.println("Force Chr: " + forceChr);
 		}
+		System.out.println("Allele Complement Check: " + alleleComp);
 
 		HashMap<String, String> sampleIdMap = new HashMap<String, String>();
 		BufferedReader sampleMapReader = new BufferedReader(new FileReader(idMapPath));
@@ -320,16 +330,19 @@ public class App_1 {
 
 			GeneticVariant data2Var;
 			if ((data2Var = data2.getSnpVariantByPos(data1Var.getSequenceName(), data1Var.getStartPos())) != null) {
-
-
-				if (!data1Var.getVariantAlleles().sameAlleles(data2Var.getVariantAlleles())) {
-					System.err.println("Different alleles for " + data1Var.getPrimaryVariantId() + " " + data1Var.getVariantAlleles() + " vs " + data2Var.getVariantAlleles() + " " + data1Var.getSequenceName() + ":" + data1Var.getStartPos() + " vs " + data2Var.getSequenceName() + ":" + data2Var.getStartPos());
-
-					++skippedVar;
-
-					continue;
+                            
+                            boolean swapNeeded = false;
+                            if(Boolean.valueOf(alleleComp) && data1Var.getVariantAlleles().getComplement().sameAlleles(data2Var.getVariantAlleles())){
+                               //|| !data1Var.getVariantAlleles().getComplement().sameAlleles(data2Var.getVariantAlleles())  
+                               swapNeeded = true;    
+                            }
+                            System.out.println(swapNeeded);
+                            if (swapNeeded ? !data1Var.getVariantAlleles().getComplement().sameAlleles(data2Var.getVariantAlleles()) : !data1Var.getVariantAlleles().sameAlleles(data2Var.getVariantAlleles())) {
+                                System.err.println("Different alleles for " + data1Var.getPrimaryVariantId() + " " + data1Var.getVariantAlleles() + " vs " + data2Var.getVariantAlleles() + " " + data1Var.getSequenceName() + ":" + data1Var.getStartPos() + " vs " + data2Var.getSequenceName() + ":" + data2Var.getStartPos() + ";" + data2Var.getVariantAlleles().getComplement());
+				++skippedVar;
+				continue;
 				}
-
+                            
 				++comparedVar;
 
 				data1VarDosages = data1Var.getSampleDosages();
@@ -337,7 +350,7 @@ public class App_1 {
 
 				data1VarAlleles = data1Var.getSampleVariants();
 				data2VarAlleles = data2Var.getSampleVariants();
-
+                                
 				if (data1Var.getVariantAlleles().get(0) != data2Var.getVariantAlleles().get(0)) {
 					for (int j = 0; j < data2VarDosages.length; ++j) {
 						data2VarDosages[j] = (data2VarDosages[j] - 2) * -1;
@@ -374,8 +387,8 @@ public class App_1 {
 					if (data1Missing || data2Missing) {
 						continue;
 					}
-
-					if (data1SampleAllele.sameAlleles(data2SampleAllele)) {
+                                        
+					if (data1SampleAllele.sameAlleles(swapNeeded ? data2SampleAllele.getComplement() : data2SampleAllele)) {
 						++snpIndenticalCall;
 						sampleIndenticalCallCount.get(sample).getAndIncrement();
 					}
