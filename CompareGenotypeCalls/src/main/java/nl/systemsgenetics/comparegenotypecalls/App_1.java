@@ -3,7 +3,6 @@ package nl.systemsgenetics.comparegenotypecalls;
 import gnu.trove.map.hash.TObjectIntHashMap;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
-import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.util.ArrayList;
@@ -74,6 +73,7 @@ public class App_1 {
 				+ "* VCFFOLDER - matches all bgziped vcf files + tabix index in a folder\n"
 				+ "* SHAPEIT2 - shapeit2 phased haplotypes .haps & .sample\n"
 				+ "* GEN - Oxford .gen & .sample\n"
+				+ "* GENFOLDER - matches all Oxford .gen & .sample\n"
 				+ "* TRITYPER - TriTyper format folder");
 		OptionBuilder.withLongOpt("data1Type");
 		OptionBuilder.isRequired();
@@ -95,6 +95,7 @@ public class App_1 {
 				+ "* VCFFOLDER - matches all bgziped vcf files + tabix index in a folder\n"
 				+ "* SHAPEIT2 - shapeit2 phased haplotypes .haps & .sample\n"
 				+ "* GEN - Oxford .gen & .sample\n"
+				+ "* GENFOLDER - matches all Oxford .gen & .sample\n"
 				+ "* TRITYPER - TriTyper format folder");
 		OptionBuilder.withLongOpt("data2Type");
 		OptionBuilder.isRequired();
