@@ -336,7 +336,7 @@ public class App_1 {
                                //|| !data1Var.getVariantAlleles().getComplement().sameAlleles(data2Var.getVariantAlleles())  
                                swapNeeded = true;    
                             }
-                            System.out.println(swapNeeded);
+                            //System.out.println(swapNeeded);
                             if (swapNeeded ? !data1Var.getVariantAlleles().getComplement().sameAlleles(data2Var.getVariantAlleles()) : !data1Var.getVariantAlleles().sameAlleles(data2Var.getVariantAlleles())) {
                                 System.err.println("Different alleles for " + data1Var.getPrimaryVariantId() + " " + data1Var.getVariantAlleles() + " vs " + data2Var.getVariantAlleles() + " " + data1Var.getSequenceName() + ":" + data1Var.getStartPos() + " vs " + data2Var.getSequenceName() + ":" + data2Var.getStartPos() + ";" + data2Var.getVariantAlleles().getComplement());
 				++skippedVar;
