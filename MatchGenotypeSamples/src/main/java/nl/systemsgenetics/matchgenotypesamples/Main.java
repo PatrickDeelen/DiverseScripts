@@ -1,5 +1,6 @@
 package nl.systemsgenetics.matchgenotypesamples;
 
+
 import gnu.trove.map.TObjectIntMap;
 import gnu.trove.map.hash.TObjectIntHashMap;
 import gnu.trove.procedure.TIntProcedure;
@@ -23,6 +24,7 @@ import org.molgenis.genotype.RandomAccessGenotypeDataReaderFormats;
 import org.molgenis.genotype.multipart.IncompatibleMultiPartGenotypeDataException;
 import org.molgenis.genotype.tabix.TabixFileNotFoundException;
 import org.molgenis.genotype.variant.GeneticVariant;
+import umcg.genetica.containers.DenseGenericObjectMatrix2D;
 
 /**
  * Hello world!
@@ -253,6 +255,7 @@ public class Main {
 		final RandomAccessGenotypeData data2;
 
 		try {
+                    //System.out.println("Creating Genotype Data input 1: " + " time: " + System.currentTimeMillis());
 			data1 = input1Type.createFilteredGenotypeData(input1BasePaths, 100, null, null, null, input1MinimumPosteriorProbability);
 		} catch (TabixFileNotFoundException e) {
 			LOGGER.fatal("Tabix file not found for input data at: " + e.getPath() + "\n"
@@ -274,6 +277,7 @@ public class Main {
 		}
 
 		try {
+                      //  System.out.println("Creating Genotype Data input 2" + " time: " + System.currentTimeMillis());
 			data2 = input2Type.createFilteredGenotypeData(input2BasePaths, 100, null, null, null, input2MinimumPosteriorProbability);
 		} catch (TabixFileNotFoundException e) {
 			LOGGER.fatal("Tabix file not found for input data at: " + e.getPath() + "\n"
@@ -297,9 +301,9 @@ public class Main {
 		String[] data1Samles = data1.getSampleNames();
 		String[] data2Samles = data2.getSampleNames();
 
-		DenseObjectMatrix2D<SimpleRegression> regressionMatrix = new DenseObjectMatrix2D<SimpleRegression>(data1Samles.length, data2Samles.length);
-
-		for (int s1 = 0; s1 < data1Samles.length; ++s1) {
+		DenseRegressionMatrix2D regressionMatrix = new DenseRegressionMatrix2D(data1Samles.length, data2Samles.length);
+		//System.out.println("Loading in Samples now: " + " Time: " + System.currentTimeMillis());
+                for (int s1 = 0; s1 < data1Samles.length; ++s1) {
 			for (int s2 = 0; s2 < data2Samles.length; ++s2) {
 				regressionMatrix.setQuick(s1, s2, new SimpleRegression());
 			}
@@ -310,9 +314,9 @@ public class Main {
 		int excludedNotInInput2 = 0;
 		int excludedDifferentAllelesInput2 = 0;
 		int variantsFoundInBoth = 0;
-
-		for (GeneticVariant variantData1 : data1) {
-
+                
+		for (GeneticVariant variantData1 : data1) {                      
+                       
 			if (!variantData1.isSnp()) {
 				++excludedNonSnpVariants;
 				continue;
@@ -344,8 +348,15 @@ public class Main {
 			float[] variantData2SampleDosages = variantData2.getSampleDosages();
 
 
+                        //System.out.println("Entering sample loop NEW JAR: " + " Time: " + System.currentTimeMillis());
+                        
 			for (int s1 = 0; s1 < data1Samles.length; ++s1) {
-
+                            
+//                            if (j % 500 == 0) {
+//                                    System.out.println("Sample: " + j + " Time: " + System.currentTimeMillis());
+//                            }
+//                            ++j; 
+                            
 				float variantData1SampleDosage = variantData1SampleDosages[s1];
 
 				if (variantData1SampleDosage < 0) {
@@ -353,13 +364,12 @@ public class Main {
 				}
 
 				for (int s2 = 0; s2 < data2Samles.length; ++s2) {
-
 					float variantData2SampleDosage = variantData2SampleDosages[s2];
 
 					if (variantData2SampleDosage < 0) {
 						continue;
 					}
-
+                                        //The slow step...?
 					regressionMatrix.getQuick(s1, s2).addData(variantData1SampleDosage, variantData2SampleDosage);
 
 				}
