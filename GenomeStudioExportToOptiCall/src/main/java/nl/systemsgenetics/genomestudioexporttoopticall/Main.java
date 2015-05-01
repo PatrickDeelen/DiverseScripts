@@ -28,14 +28,13 @@ import org.apache.commons.cli.PosixParser;
 import org.apache.commons.lang3.StringUtils;
 
 /**
- * 
+ *
  *
  */
 public class Main {
 
 	private static final Pattern SAMPLE_COUNT_PATTERN = Pattern.compile("Total Samples\\s+(\\d+)");
 	private static final Pattern SNP_COUNT_PATTERN = Pattern.compile("Total SNPs\\s+(\\d+)");
-
 	private static final Options OPTIONS;
 
 	static {
@@ -67,15 +66,20 @@ public class Main {
 		OptionBuilder.withDescription("Samples to include, optional");
 		OptionBuilder.withLongOpt("samples");
 		OPTIONS.addOption(OptionBuilder.create('s'));
-		
+
 		OptionBuilder.withArgName("path");
 		OptionBuilder.hasArg();
 		OptionBuilder.withDescription("Variants to include, optional");
 		OptionBuilder.withLongOpt("variants");
 		OPTIONS.addOption(OptionBuilder.create('v'));
-		
+
+		OptionBuilder.withArgName("");
+		OptionBuilder.withDescription("Remove duplicated variants");
+		OptionBuilder.withLongOpt("excludeDuplicates");
+		OPTIONS.addOption(OptionBuilder.create("ed"));
+
 	}
-	
+
 	@SuppressWarnings("RedundantStringConstructorCall")
 	public static void main(String[] args) throws Exception {
 
@@ -86,37 +90,39 @@ public class Main {
 		int allelesColumn = 22;
 		int aSignalColumn = 29;
 		int bSignalColumn = 30;
-		
+
 		final File finalReportFile;
 		final File outputFolder;
 		final File probeUpdateFile;
 		final File sampleIncludeFile;
 		final File variantIncludeFile;
-		
+		final boolean excludeDuplicates;
+
 		try {
 			final CommandLine commandLine = new PosixParser().parse(OPTIONS, args, false);
 
 			finalReportFile = new File(commandLine.getOptionValue('r'));
 			outputFolder = new File(commandLine.getOptionValue('o'));
-			
-			if(commandLine.hasOption('p')){
+
+			if (commandLine.hasOption('p')) {
 				probeUpdateFile = new File(commandLine.getOptionValue('p'));
 			} else {
 				probeUpdateFile = null;
 			}
-			
-			if(commandLine.hasOption('s')){
+
+			if (commandLine.hasOption('s')) {
 				sampleIncludeFile = new File(commandLine.getOptionValue('s'));
 			} else {
 				sampleIncludeFile = null;
 			}
-			
-			if(commandLine.hasOption('v')){
+
+			if (commandLine.hasOption('v')) {
 				variantIncludeFile = new File(commandLine.getOptionValue('v'));
 			} else {
 				variantIncludeFile = null;
 			}
-			
+
+			excludeDuplicates = commandLine.hasOption("ed");
 
 		} catch (ParseException ex) {
 			System.err.println("Invalid command line arguments: ");
@@ -127,11 +133,17 @@ public class Main {
 			return;
 		}
 
-		System.out.println("Input file: " + finalReportFile.getAbsolutePath());
-		System.out.println("Output folder: " + outputFolder.getAbsolutePath());
+		System.out.println(" - Input file: " + finalReportFile.getAbsolutePath());
+		System.out.println(" - Output folder: " + outputFolder.getAbsolutePath());
 
 		if (probeUpdateFile != null) {
-			System.out.println("Probe update file: " + probeUpdateFile.getAbsolutePath());
+			System.out.println(" - Probe update file: " + probeUpdateFile.getAbsolutePath());
+		}
+		
+		if(excludeDuplicates){
+			System.out.println(" - Excluding duplicated variants");
+		} else {
+			System.out.println(" - Including duplicated variants");
 		}
 
 		if (!outputFolder.isDirectory()) {
@@ -158,24 +170,24 @@ public class Main {
 		} else {
 			probeUpdates = null;
 		}
-		
+
 		final Set<String> sampleIncludeSet;
-		if(sampleIncludeFile != null){
+		if (sampleIncludeFile != null) {
 			sampleIncludeSet = readFilter(sampleIncludeFile);
 		} else {
 			sampleIncludeSet = null;
 		}
-		
+
 		final Set<String> variantIncludeSet;
-		if(variantIncludeFile != null){
+		if (variantIncludeFile != null) {
 			variantIncludeSet = readFilter(variantIncludeFile);
 		} else {
 			variantIncludeSet = null;
 		}
-		
+
 		final HashSet<String> excludedSamplesByIncludeList = new HashSet<String>();
 		final HashSet<String> excludedVariantsByIncludeList = new HashSet<String>();
-		
+
 		BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(finalReportFile), "UTF-8"));
 
 		String line;
@@ -190,13 +202,18 @@ public class Main {
 		int sampleCount = 0;
 		int snpCount = 0;
 		int stringBuilderSize = 0;
-		HashMap<String, TreeMap<Integer, StringBuilder>> outputData = new HashMap<String, TreeMap<Integer, StringBuilder>>(25);
+		HashMap<String, TreeMap<Integer, HashSet<String>>> varsByPos = new HashMap<String, TreeMap<Integer, HashSet<String>>>(25);
 		LinkedHashSet<String> samples = null;
+
+		HashMap<String, StringBuilder> outputData = new HashMap<String, StringBuilder>();
 
 		int excludedNaSnps = 0;
 		int excludedInvalidSnps = 0;
 
 		String currentSample = "";
+		HashSet<String> currentSampleSnps = new HashSet<String>(snpCount);
+
+		int snpFoundFirstSample = -1;
 
 		finalReportLines:
 		while ((line = reader.readLine()) != null) {
@@ -250,13 +267,13 @@ public class Main {
 				final char a;
 				final char b;
 				final String sampleId = elements[sampleColumn];
-				
-				if(sampleIncludeSet != null && !sampleIncludeSet.contains(sampleId)){
+
+				if (sampleIncludeSet != null && !sampleIncludeSet.contains(sampleId)) {
 					excludedSamplesByIncludeList.add(sampleId);
 					continue finalReportLines;
 				}
-				
-				if(variantIncludeSet != null && !variantIncludeSet.contains(varId)){
+
+				if (variantIncludeSet != null && !variantIncludeSet.contains(varId)) {
 					excludedVariantsByIncludeList.add(varId);
 					continue finalReportLines;
 				}
@@ -280,12 +297,12 @@ public class Main {
 					pos = Integer.valueOf(elements[chrPosColumn]);
 					a = alleles.charAt(1);
 					b = alleles.charAt(3);
-					
+
 				} else {
-					
+
 					UpdatedProbeInfo probeUpdate = probeUpdates.get(varId);
-					
-					if(probeUpdate == null){
+
+					if (probeUpdate == null) {
 						continue;
 					} else {
 						chr = probeUpdate.getChr();
@@ -293,29 +310,47 @@ public class Main {
 						a = probeUpdate.getaAllele();
 						b = probeUpdate.getbAllele();
 					}
-					
+
 				}
 
 
 
 				if (!sampleId.equals(currentSample)) {
 					if (samples.contains(sampleId)) {
-						throw new Exception("Sample order problem");
+						throw new Exception("Sample order problem or duplicate sample");
 					}
+
+					if (!currentSample.equals("")) {
+						if (snpFoundFirstSample == -1) {
+							snpFoundFirstSample = currentSampleSnps.size();
+						} else if (snpFoundFirstSample != currentSampleSnps.size()) {
+							throw new Exception("Found different number of SNPs for sample: " + currentSample + " compared to first sample. Expected: " + snpFoundFirstSample + " found: " + currentSampleSnps.size());
+						}
+					}
+
 					samples.add(new String(sampleId));
 					currentSample = sampleId;
+					currentSampleSnps.clear();
 				}
 
-				TreeMap<Integer, StringBuilder> outputDataChr;
-				if (outputData.containsKey(chr)) {
-					outputDataChr = outputData.get(chr);
+				currentSampleSnps.add(varId);
+
+				TreeMap<Integer, HashSet<String>> varsByPosChr;
+				if (varsByPos.containsKey(chr)) {
+					varsByPosChr = varsByPos.get(chr);
 				} else {
-					outputDataChr = new TreeMap<Integer, StringBuilder>();
-					outputData.put(new String(chr), outputDataChr);
+					varsByPosChr = new TreeMap<Integer, HashSet<String>>();
+					varsByPos.put(chr, varsByPosChr);
 				}
+				HashSet<String> posVars = varsByPosChr.get(pos);
+				if (posVars == null) {
+					posVars = new HashSet<String>();
+					varsByPosChr.put(pos, posVars);
+				}
+				posVars.add(varId);
 
 				StringBuilder snpOutput;
-				if (!outputDataChr.containsKey(pos)) {
+				if (!outputData.containsKey(varId)) {
 					snpOutput = new StringBuilder(stringBuilderSize);
 					snpOutput.append(varId);
 					snpOutput.append('\t');
@@ -323,9 +358,9 @@ public class Main {
 					snpOutput.append('\t');
 					snpOutput.append(a);
 					snpOutput.append(b);
-					outputDataChr.put(pos, snpOutput);
+					outputData.put(varId, snpOutput);
 				} else {
-					snpOutput = outputDataChr.get(pos);
+					snpOutput = outputData.get(varId);
 				}
 				snpOutput.append('\t');
 				snpOutput.append(elements[aSignalColumn]);
@@ -336,16 +371,16 @@ public class Main {
 
 		}
 
-		if(probeUpdates == null){
+		if (probeUpdates == null) {
 			System.out.println("Excluded N/A SNPs: " + excludedNaSnps);
 			System.out.println("Excluded invalid alleles SNPs: " + excludedInvalidSnps);
 		}
-		
-		if(sampleIncludeSet != null){
+
+		if (sampleIncludeSet != null) {
 			System.out.println("Excluded samples by include list: " + excludedSamplesByIncludeList.size());
 		}
-		
-		if(variantIncludeSet != null){
+
+		if (variantIncludeSet != null) {
 			System.out.println("Excluded variants by include list: " + excludedVariantsByIncludeList.size());
 		}
 
@@ -363,43 +398,56 @@ public class Main {
 		String headerString = header.toString();
 
 		int varCount = 0;
-		for (Map.Entry<String, TreeMap<Integer, StringBuilder>> chrEntry : outputData.entrySet()) {
+		for (Map.Entry<String, TreeMap<Integer, HashSet<String>>> chrEntry : varsByPos.entrySet()) {
 
 			String chr = chrEntry.getKey();
-			TreeMap<Integer, StringBuilder> outputDataChr = chrEntry.getValue();
+			TreeMap<Integer, HashSet<String>> varsByPosChr = chrEntry.getValue();
 
 			BufferedWriter writer = new BufferedWriter(new FileWriter(new File(outputFolder, "chr_" + chr + "_intensities.tsv")));
 
 			writer.append(headerString);
 
-			for (StringBuilder snpOutput : outputDataChr.values()) {
-				snpOutput.append('\n');
-				writer.append(snpOutput);
-				++varCount;
+			positions:
+			for (HashSet<String> varIds : varsByPosChr.values()) {
+
+				for (String varId : varIds) {
+
+					StringBuilder snpOutput = outputData.get(varId);
+
+					snpOutput.append('\n');
+					writer.append(snpOutput);
+					++varCount;
+
+					if (excludeDuplicates) {
+						continue positions;
+					}
+
+				}
+
+
 			}
 
 			writer.close();
 
 		}
-		
+
 		System.out.println("Included probes: " + varCount);
 
 	}
-	
-	private static Set<String> readFilter(File filterFile) throws UnsupportedEncodingException, IOException{
-		
+
+	private static Set<String> readFilter(File filterFile) throws UnsupportedEncodingException, IOException {
+
 		HashSet<String> filter = new HashSet<String>();
-		
+
 		BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(filterFile), "UTF-8"));
-		
+
 		String line;
-		
+
 		while ((line = reader.readLine()) != null) {
 			filter.add(line);
 		}
-		
+
 		return Collections.unmodifiableSet(filter);
-		
+
 	}
-	
 }
