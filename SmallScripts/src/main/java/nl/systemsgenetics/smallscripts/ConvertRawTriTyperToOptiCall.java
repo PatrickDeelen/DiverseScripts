@@ -172,7 +172,8 @@ public class ConvertRawTriTyperToOptiCall {
 				outputWriter.write('\t');
 				outputWriter.write(snpAlleleMap.get(snp));
 
-
+				int countR0T0 = 0;
+				
 				for (int sampleI = 0; sampleI < samples.size(); ++sampleI) {
 
 					if (!sampleIncluded[sampleI]) {
@@ -181,6 +182,10 @@ public class ConvertRawTriTyperToOptiCall {
 
 					byte rByte = rawdata.getR(snpI, sampleI);
 					byte thetaByte = rawdata.getTheta(snpI, sampleI);
+					
+					if(rByte == 0 && thetaByte == 0){
+						++countR0T0;
+					}
 
 					double rValue = (double) (-Byte.MIN_VALUE + (int) rByte) / 50d;
 					double theta = (double) (-Byte.MIN_VALUE + (int) thetaByte) / 200d;
@@ -194,6 +199,8 @@ public class ConvertRawTriTyperToOptiCall {
 
 				}
 
+				System.out.println(snp + "\t" + countR0T0);
+				
 				outputWriter.write('\n');
 
 			}
