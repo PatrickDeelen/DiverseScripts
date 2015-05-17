@@ -266,7 +266,7 @@ public class Main {
 				final int pos;
 				final char a;
 				final char b;
-				final String sampleId = elements[sampleColumn];
+				final String sampleId = elements[sampleColumn].replace(' ', '_');
 
 				if (sampleIncludeSet != null && !sampleIncludeSet.contains(sampleId)) {
 					excludedSamplesByIncludeList.add(sampleId);
