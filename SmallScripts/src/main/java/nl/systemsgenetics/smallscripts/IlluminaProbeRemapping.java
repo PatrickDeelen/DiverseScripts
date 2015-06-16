@@ -30,18 +30,18 @@ public class IlluminaProbeRemapping {
 
 	public static void main(String[] args) throws Exception {
 
-//		File samFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\ImmunoProbes_gapped.sam");
-//		File illuminaMappingFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\Immuno_BeadChip_11419691_B.csv");
-//		String outputPrefix = "D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\ImmunoProbes_gapped";
+		File samFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\ImmunoProbes_gapped.sam");
+		File illuminaMappingFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\Immuno_BeadChip_11419691_B.csv");
+		String outputPrefix = "D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\ImmunoProbes_gapped";
 
 
 //		File samFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\CytoSNP-12v2.1Probes_gapped.sam");
 //		File illuminaMappingFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\HumanCytoSNP-12v2-1_L.csv");
 //		String outputPrefix = "D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\CytoSNP-12v2.1Probes_gapped";
 
-		File samFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\CytoSNP-12v2Probes_gapped.sam");
-		File illuminaMappingFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\HumanCytoSNP-12v2_H.csv");
-		String outputPrefix = "D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\CytoSNP-12v2Probes_gapped";
+//		File samFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\CytoSNP-12v2Probes_gapped.sam");
+//		File illuminaMappingFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\HumanCytoSNP-12v2_H.csv");
+//		String outputPrefix = "D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\CytoSNP-12v2Probes_gapped";
 
 		File referenceGenomeFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\human_g1k_v37.fasta");
 
@@ -578,19 +578,13 @@ public class IlluminaProbeRemapping {
 							|| (variantAltAllele.equals("A") && variantRefAllele.equals("T"))
 							|| (variantAltAllele.equals("T") && variantRefAllele.equals("A"))) {
 
-						final int measurePos;
 						if (reverseStrand) {
-							measurePos = varPosition + 1;
+							//Take complement, ambigous SNP so swap alleles
+							AAllele = String.valueOf(illuminaInfo.getA2());
+							BAllele = String.valueOf(illuminaInfo.getA1());
 						} else {
-							measurePos = varPosition - 1;
-						}
-						final char refMeasureAllele = referenceGenome.getNucleotide(chr, measurePos);
-						if (refMeasureAllele == 'A' || refMeasureAllele == 'T') {
-							AAllele = variantRefAllele;
-							BAllele = variantAltAllele;
-						} else {
-							AAllele = variantAltAllele;
-							BAllele = variantRefAllele;
+							AAllele = String.valueOf(illuminaInfo.getA1());
+							BAllele = String.valueOf(illuminaInfo.getA2());
 						}
 
 					} else {

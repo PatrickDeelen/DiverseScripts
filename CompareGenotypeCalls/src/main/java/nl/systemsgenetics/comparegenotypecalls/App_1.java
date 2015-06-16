@@ -462,7 +462,7 @@ public class App_1 {
 			out.append('\t');
 			out.append(Double.toString(sampleCor.get(sample).getRSquare()));
 			out.append('\t');
-			out.append(Double.toString(sampleIndenticalCallCount.get(sample).get() / (double) comparedVar));
+			out.append(Double.toString(sampleIndenticalCallCount.get(sample).get() / (double) sampleCor.get(sample).getN()));
 			out.append('\t');
 			out.append(sampleVarCount.get(sample).toString());
 			out.append('\t');
