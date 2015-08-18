@@ -30,14 +30,14 @@ public class IlluminaProbeRemapping {
 
 	public static void main(String[] args) throws Exception {
 
-		File samFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\ImmunoProbes_gapped.sam");
-		File illuminaMappingFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\Immuno_BeadChip_11419691_B.csv");
-		String outputPrefix = "D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\ImmunoProbes_gapped";
+//		File samFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\ImmunoProbes_gapped.sam");
+//		File illuminaMappingFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\Immuno_BeadChip_11419691_B.csv");
+//		String outputPrefix = "D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\ImmunoProbes_gapped";
 
 
-//		File samFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\CytoSNP-12v2.1Probes_gapped.sam");
-//		File illuminaMappingFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\HumanCytoSNP-12v2-1_L.csv");
-//		String outputPrefix = "D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\CytoSNP-12v2.1Probes_gapped";
+		File samFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\CytoSNP-12v2.1Probes_gapped.sam");
+		File illuminaMappingFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\HumanCytoSNP-12v2-1_L.csv");
+		String outputPrefix = "D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\CytoSNP-12v2.1Probes_gapped";
 
 //		File samFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\CytoSNP-12v2Probes_gapped.sam");
 //		File illuminaMappingFile = new File("D:\\UMCG\\Genetica\\Projects\\LifeLinesDeep\\genotypingRelease3\\remappingProbes\\HumanCytoSNP-12v2_H.csv");

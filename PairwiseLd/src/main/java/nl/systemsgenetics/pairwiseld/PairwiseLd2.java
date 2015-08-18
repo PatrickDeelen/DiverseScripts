@@ -30,7 +30,7 @@ public class PairwiseLd2 {
 	 */
 	public static void main(String[] args) throws IOException, LdCalculatorException {
 
-		if (args.length != 7) {
+		if (args.length != 8) {
 			System.out.println("Args:");
 			System.out.println(" - SNPs to query file tab seperated");
 			System.out.println(" - SNPs to query file chr column");
@@ -39,6 +39,7 @@ public class PairwiseLd2 {
 			System.out.println(" - Query range (bases to left and right)");
 			System.out.println(" - Min LD to report (r2)");
 			System.out.println(" - Output file path");
+			System.out.println(" - SNPs to query file name column");
 			System.exit(0);
 		}
 
@@ -49,6 +50,7 @@ public class PairwiseLd2 {
 		int queryRange = Integer.parseInt(args[4]);
 		double minLd = Double.parseDouble(args[5]);
 		String outputFilePath = args[6];
+		int nameCol = Integer.parseInt(args[7]);
 
 		System.out.println("SNPs to query file: " + querySnpsFilePath);
 		System.out.println("Chr col: " + chrCol);
@@ -57,21 +59,14 @@ public class PairwiseLd2 {
 		System.out.println("Query range (bases to left and right): " + queryRange);
 		System.out.println("Min LD to report (r2): " + minLd);	
 		System.out.println("Output file path: " + outputFilePath);
+		System.out.println("Name col: " + posCol);
 
 		CSVReader querySnpReader = new CSVReader(new FileReader(querySnpsFilePath), '\t');
 		String[] nextLine;
 
-		ArrayList<ChrPos> querySnps = new ArrayList<ChrPos>();
+		
 
-		while ((nextLine = querySnpReader.readNext()) != null) {
-			querySnps.add(new ChrPos(nextLine[chrCol], Integer.parseInt(nextLine[posCol])));
-		}
-
-
-
-		querySnpReader.close();
-
-		System.out.println("Number of query SNP to query: " + querySnps.size());
+		//System.out.println("Number of query SNP to query: " + querySnps.size());
 
 		RandomAccessGenotypeData genotypeData = MultiPartGenotypeData.createFromVcfFolder(new File(vcfFolder), 10000, 0);
 
@@ -82,24 +77,28 @@ public class PairwiseLd2 {
 
 		outputWriter.writeNext(outputHeaders);
 
-		for (ChrPos querySnp : querySnps) {
+		while ((nextLine = querySnpReader.readNext()) != null) {
+			
+			String querySnpChr = nextLine[chrCol];
+			int querySnpPos = Integer.parseInt(nextLine[posCol]);
+			String querySnpName = nextLine[nameCol];
 			
 			GeneticVariant snp1;
 			try {
-				snp1 = genotypeData.getSnpVariantByPos(querySnp.getChr(), querySnp.getPos());
+				snp1 = genotypeData.getSnpVariantByPos(querySnpChr, querySnpPos);
 			} catch (GenotypeDataException ex) {
-				System.err.println("Error reading SNP " + querySnp.getChr() + ":" + querySnp.getPos());
+				System.err.println("Error reading SNP " + querySnpChr + ":" + querySnpPos);
 				ex.printStackTrace();
 				continue;
 			}
 
 			if (snp1 == null) {
-				System.err.println("Error snp not found: " + querySnp.getChr() + ":" + querySnp.getPos());
+				System.err.println("Error snp not found: " + querySnpChr + ":" + querySnpPos);
 				continue;
 			}
 			
 			if( !(snp1.getMinorAlleleFrequency() > 0) ){
-				System.err.println("Error snp with MAF 0: " + querySnp.getChr() + ":" + querySnp.getPos());
+				System.err.println("Error snp with MAF 0: " + querySnpChr + ":" + querySnpPos);
 				continue;
 			}
 
@@ -120,9 +119,9 @@ public class PairwiseLd2 {
 				String snp2Chr = snp2.getSequenceName();
 				int snp2Pos = snp2.getStartPos();
 				
-				if(snp2Pos == snp1Pos){
-					continue targetSnps;
-				}
+//				if(snp2Pos == snp1Pos){
+//					continue targetSnps;
+//				}
 				
 				if( !(snp2.getMinorAlleleFrequency() > 0) ){
 					continue targetSnps;
@@ -140,7 +139,7 @@ public class PairwiseLd2 {
 
 				String[] results = new String[15];
 				int column = 0;
-				results[column++] = snp1Id;
+				results[column++] = querySnpName;
 				results[column++] = snp2Id;
 				results[column++] = String.valueOf(ld.getR2());
 				results[column++] = String.valueOf(ld.getDPrime());
@@ -163,6 +162,7 @@ public class PairwiseLd2 {
 		outputWriter.close();
 
 		System.out.println("LD done");
-		
+		querySnpReader.close();
 	}
 }
+
