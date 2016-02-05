@@ -333,7 +333,7 @@ public class Main {
 				continue;
 			}
 
-			if (!variantData1.getVariantAlleles().containsAll(variantData2.getVariantAlleles())) {
+			if (!variantData1.getVariantAlleles().sameAlleles(variantData2.getVariantAlleles())) {
 				++excludedDifferentAllelesInput2;
 				continue;
 			}
