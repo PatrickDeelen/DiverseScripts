@@ -7,7 +7,6 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.util.List;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.HelpFormatter;
@@ -17,7 +16,6 @@ import org.apache.commons.cli.ParseException;
 import org.apache.commons.cli.PosixParser;
 import org.apache.commons.math3.stat.regression.SimpleRegression;
 import org.apache.log4j.Logger;
-import org.molgenis.genotype.Alleles;
 import org.molgenis.genotype.GenotypeDataException;
 import org.molgenis.genotype.GenotypeInfo;
 import org.molgenis.genotype.RandomAccessGenotypeData;
@@ -113,10 +111,20 @@ public class Main {
 
 		OptionBuilder.withArgName("double");
 		OptionBuilder.hasArg();
-		OptionBuilder.withDescription("The minimum dosage r to match sample. default: " + 0.95);
+		OptionBuilder.withDescription("The minimum dosage r2 to match sample. default: " + 0.9);
 		OptionBuilder.withLongOpt("dosageR");
 		OPTIONS.addOption(OptionBuilder.create("r"));
+        
+        OptionBuilder.withArgName("boolean");
+		OptionBuilder.withDescription("Use called genotypes. default: False");
+		OptionBuilder.withLongOpt("useCalled");
+		OPTIONS.addOption(OptionBuilder.create("c"));
 
+        OptionBuilder.withArgName("boolean");
+		OptionBuilder.withDescription("Test only same alleles. default: False");
+		OptionBuilder.withLongOpt("sameAlleles");
+		OPTIONS.addOption(OptionBuilder.create("s"));
+        
 
 	}
 
@@ -214,13 +222,16 @@ public class Main {
 
 		final double minRToMatch;
 		try {
-			minRToMatch = commandLine.hasOption("r") ? Double.parseDouble(commandLine.getOptionValue("r")) : 0.95;
+			minRToMatch = commandLine.hasOption("r") ? Double.parseDouble(commandLine.getOptionValue("r")) : 0.9;
 		} catch (NumberFormatException e) {
 			System.err.println("Error parsing -r \"" + commandLine.getOptionValue("r") + "\" is not an double");
 			System.exit(1);
 			return;
 		}
-
+        
+        final boolean useCalledGenotypes = commandLine.hasOption('c');
+        final boolean strictAlleleTest = commandLine.hasOption('s');
+        
 		final String outputFilePath = commandLine.getOptionValue('o');
 
 		StringBuilder input1Paths = new StringBuilder();
@@ -234,7 +245,7 @@ public class Main {
 			input2Paths.append(path);
 			input2Paths.append(' ');
 		}
-
+        
 		System.out.println("Input 1 base path: " + input1Paths);
 		System.out.println("Input 1 data type: " + input1Type.getName());
 		System.out.println("Input 1 min call probability: " + input1MinimumPosteriorProbability);
@@ -249,7 +260,6 @@ public class Main {
 		if (outputFolder != null) {
 			outputFolder.mkdirs();
 		}
-
 
 		final RandomAccessGenotypeData data1;
 		final RandomAccessGenotypeData data2;
@@ -314,20 +324,16 @@ public class Main {
 		int excludedDifferentAllelesInput2 = 0;
 		int variantsFoundInBoth = 0;
         
-        BufferedWriter logWriter = new BufferedWriter(new FileWriter(outputFile+"_log.txt"));
+//        BufferedWriter logWriter = new BufferedWriter(new FileWriter(outputFile+"_log.txt"));
 		for (GeneticVariant variantData1 : data1) {
 
-			if (!variantData1.isSnp()) {
+			if (variantData1.getAlleleCount()>2) {
+//                System.out.println(variantData1.getAlleleCount());
 				++excludedNonSnpVariants;
 				continue;
 			}
-
-			if (!variantData1.isBiallelic()) {
-				++excludedNonBialelic;
-				continue;
-			}
             
-            if (variantData1.isAtOrGcSnp()) {
+            if (variantData1.isBiallelic() && variantData1.isAtOrGcSnp()) {
 				++excludedNonSwappableSnp;
 				continue;
 			}
@@ -342,22 +348,38 @@ public class Main {
 				continue;
 			}
             
+            if (variantData2.getAlleleCount()>2) {
+				++excludedNonBialelic;
+				continue;
+			}
+            
             boolean complementSnp = false;
             
-            //Maybe Checked swapped?
-			if (!variantData1.getVariantAlleles().sameAlleles(variantData2.getVariantAlleles())) {
-//                if(variantData1.getVariantAlleles().getComplement().sameAlleles(variantData2.getVariantAlleles())){
-//                    complementSnp = true;
-//                } else {
+            if(strictAlleleTest){
+                if (!variantData1.getVariantAlleles().sameAlleles(variantData2.getVariantAlleles())) {
+                    if(variantData1.getVariantAlleles().getComplement().sameAlleles(variantData2.getVariantAlleles())){
+                        complementSnp = true;
+                    } else {
+                        ++excludedDifferentAllelesInput2;
+                        continue;
+                    }
+                }
+            } else {
+                if (!variantData2.getVariantAlleles().containsAll(variantData1.getVariantAlleles())) {
                     ++excludedDifferentAllelesInput2;
                     continue;
-//                }
-			}
-
+                }
+            }
+            
 			++variantsFoundInBoth;
-
-			float[] variantData1SampleDosages = variantData1.getSampleDosages();
-			float[] variantData2SampleDosages = getPropperAllelsVariant2(variantData1, variantData2, complementSnp);
+            
+            float[] variantData1SampleDosages = null;
+            if(useCalledGenotypes){
+                variantData1SampleDosages = byteToFloat(variantData1.getSampleCalledDosages());
+            } else {
+                variantData1SampleDosages = variantData1.getSampleDosages();
+            }
+			float[] variantData2SampleDosages = getPropperAllelsVariant2(variantData1, variantData2, complementSnp, useCalledGenotypes);
             
 
 			for (int s1 = 0; s1 < data1Samples.length; ++s1) {
@@ -375,16 +397,16 @@ public class Main {
 					if (variantData2SampleDosage < 0) {
 						continue;
 					}
-                    if(data2Samples[s2].equals("LL-LLDeep_1094")){
-                        logWriter.append(variantData1.getPrimaryVariantId()+"\t"+variantData1.getRefAllele()+"\t"+variantData1.getVariantAlleles().get(1)+"\t"+variantData1SampleDosage+"\t"+variantData2SampleDosage+"\n");
-                    }
+//                    if(data2Samples[s2].equals("LL-LLDeep_0727")){
+//                        logWriter.append(variantData1.getPrimaryVariantId()+"\t"+chr+"\t"+pos+"\t"+variantData1.getRefAllele()+"\t"+ (variantData1.getVariantAlleles().getAlleles().size()>1 ? variantData1.getVariantAlleles().get(1) : "-") +"\t"+variantData1SampleDosage+"\t"+variantData2SampleDosage+"\n");
+//                    }
 					regressionMatrix.getQuick(s1, s2).addData(variantData1SampleDosage, variantData2SampleDosage);
 
 				}
 			}
 		}
         
-        logWriter.close();
+//        logWriter.close();
         
 		BufferedWriter outputWriter = new BufferedWriter(new FileWriter(outputFile));
 
@@ -448,12 +470,13 @@ public class Main {
 		System.out.println("Matching procedure completed");
 		System.out.println();
 		System.out.println("Variant excluded from input 1:");
-		System.out.println(" - Not a SNP: " + excludedNonSnpVariants);
-		System.out.println(" - Not bi-allelic: " + excludedNonBialelic);
-        System.out.println(" - Non swappable SNPs: " + excludedNonSwappableSnp);
+		System.out.println(" - Not a mono-allelic or bi-allelic site: " + excludedNonSnpVariants);
+        System.out.println(" - A/T or C/G SNPs: " + excludedNonSwappableSnp);
 		System.out.println(" - Not found in input 2: " + excludedNotInInput2);
+        System.out.println(" - Not a mono-allelic or bi-allelic site in input 2: " + excludedNonBialelic);
 		System.out.println(" - Different alleles in input 2: " + excludedDifferentAllelesInput2 + " (might be strand issues)");
 		System.out.println("Variants matched between input 1 and 2: " + variantsFoundInBoth);
+        
 		System.out.println();
 		System.out.println("Comparisons using < 5000 variants: " + lowVarWarning);
 		System.out.println("Samples with match in input 2: " + sampleMatched + " out of " + data1Samples.length + " of which " + sampleMultipleMatched + " match to multiple samples in input 2");
@@ -461,31 +484,65 @@ public class Main {
 
 	}
 
-    private static float[] getPropperAllelsVariant2(GeneticVariant variantData1, GeneticVariant variantData2, boolean complementSnp) {
+    private static float[] getPropperAllelsVariant2(GeneticVariant variantData1, GeneticVariant variantData2, boolean complementSnp, boolean useCalledGenotypes) {
         boolean swapNeeded = false;
         if(!complementSnp){
-            float[] variantData2SampleDosages = variantData2.getSampleDosages();
-            if(variantData1.getRefAllele() != variantData2.getRefAllele()){
+            
+            if(!variantData1.getRefAllele().equals(variantData2.getRefAllele())){
                 swapNeeded = true;
             }
-            if(swapNeeded){ 
-                for(int i = 0; i<variantData2SampleDosages.length; ++i){
-                    variantData2SampleDosages[i] = Math.abs(variantData2SampleDosages[i]-2);
+            if(swapNeeded){
+                float[] variantData2SampleDosages = variantData2.getSampleDosages();
+                if(!useCalledGenotypes){
+                    for(int i = 0; i<variantData2SampleDosages.length; ++i){
+                        variantData2SampleDosages[i] = Math.abs(variantData2SampleDosages[i]-2);
+                    }
+                } else {
+                    for(int i = 0; i<variantData2SampleDosages.length; ++i){
+                        variantData2SampleDosages[i] = Math.abs(variantData2.getSampleCalledDosages()[i]-2);
+                    }
+                }
+                return variantData2SampleDosages;
+            } else {
+                if(!useCalledGenotypes){
+                    return variantData2.getSampleDosages();
+                } else {
+                    return byteToFloat(variantData2.getSampleCalledDosages());
                 }
             }
-            return variantData2SampleDosages;
+            
         } else {
-            float[] variantData2SampleDosages = variantData2.getSampleDosages();
-            if(variantData1.getRefAllele() != variantData2.getRefAllele().getComplement()){
+            if(!variantData1.getRefAllele().getComplement().equals(variantData2.getRefAllele())){
                 swapNeeded = true;
             }
             if(swapNeeded){ 
-                for(int i = 0; i<variantData2SampleDosages.length; ++i){
-                    variantData2SampleDosages[i] = Math.abs(variantData2SampleDosages[i]-2);
+                float[] variantData2SampleDosages = variantData2.getSampleDosages();
+                if(!useCalledGenotypes){
+                    for(int i = 0; i<variantData2SampleDosages.length; ++i){
+                        variantData2SampleDosages[i] = Math.abs(variantData2SampleDosages[i]-2);
+                    }
+                } else {
+                    for(int i = 0; i<variantData2SampleDosages.length; ++i){
+                        variantData2SampleDosages[i] = Math.abs(variantData2.getSampleCalledDosages()[i]-2);
+                    }
+                }
+                return variantData2SampleDosages;
+            } else {
+                if(!useCalledGenotypes){
+                    return variantData2.getSampleDosages();
+                } else {
+                    return byteToFloat(variantData2.getSampleCalledDosages());
                 }
             }
-            return variantData2SampleDosages;
         }
+    }
+
+    private static float[] byteToFloat(byte[] sampleCalledDosages) {
+        float[] floatValuesByte = new float[sampleCalledDosages.length];
+        for(int i=0; i<floatValuesByte.length; i++){
+            floatValuesByte[i] = sampleCalledDosages[i];
+        }
+        return floatValuesByte;
     }
 
 	private static class CountBiggerThanOne implements TIntProcedure {
