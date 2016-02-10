@@ -433,7 +433,7 @@ public class Main {
 					++lowVarWarning;
 				}
 
-				if (regression.getR() >= minRToMatch) {
+				if (regression.getRSquare() >= minRToMatch) {
 					if (matchFound) {
 						samplesMatchedString.append(',');
 						samplesMatchedRString.append(',');
