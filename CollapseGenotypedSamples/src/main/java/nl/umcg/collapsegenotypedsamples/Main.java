@@ -5,6 +5,7 @@
  */
 package nl.umcg.collapsegenotypedsamples;
 
+import au.com.bytecode.opencsv.CSVWriter;
 import cern.colt.matrix.tdouble.DoubleMatrix2D;
 import cern.colt.matrix.tdouble.impl.DenseDoubleMatrix2D;
 import java.io.BufferedWriter;
@@ -35,8 +36,8 @@ import org.molgenis.genotype.variant.GeneticVariant;
  */
 public class Main {
 
-	private static final String HEADER =
-			"  /---------------------------------------\\\n"
+	private static final String HEADER
+			= "  /---------------------------------------\\\n"
 			+ "  |      Collapse genotype samples        |\n"
 			+ "  |                                       |\n"
 			+ "  |             Patrick Deelen            |\n"
@@ -93,15 +94,17 @@ public class Main {
 		OptionBuilder.withDescription("The minimum dosage r2 to match sample. default: " + 0.9);
 		OptionBuilder.withLongOpt("dosageR");
 		OPTIONS.addOption(OptionBuilder.create("r"));
-        
+
 	}
-	
+
 	/**
 	 * @param args the command line arguments
 	 */
 	public static void main(String[] args) throws IOException {
-		
+
 		System.out.println(HEADER);
+		System.out.println();
+		System.out.println("Version: " + Main.class.getPackage().getImplementationVersion());
 		System.out.println();
 		System.out.flush(); //flush to make sure header is before errors
 		try {
@@ -164,7 +167,7 @@ public class Main {
 			System.exit(1);
 			return;
 		}
-                
+
 		final String outputFilePath = commandLine.getOptionValue('o');
 
 		StringBuilder input1Paths = new StringBuilder();
@@ -173,7 +176,6 @@ public class Main {
 			input1Paths.append(' ');
 		}
 
-		
 		System.out.println("Genotype base path: " + input1Paths);
 		System.out.println("Genotype data type: " + genotypeDataType.getName());
 		System.out.println("Min call probability: " + minimumPosteriorProbability);
@@ -208,9 +210,9 @@ public class Main {
 			System.exit(1);
 			return;
 		}
-		
+
 		final String[] samples = genotypeData.getSampleNames();
-		
+
 		DenseObjectMatrix2D<SimpleRegression> regressionMatrix = new DenseObjectMatrix2D<>(samples.length, samples.length);
 
 		for (int s1 = 0; s1 < samples.length; ++s1) {
@@ -218,23 +220,23 @@ public class Main {
 				regressionMatrix.setQuick(s1, s2, new SimpleRegression());
 			}
 		}
-		
+
 		int excludedNonSnpVariants = 0;
 		int excludedNonBialelic = 0;
-       
-//        BufferedWriter logWriter = new BufferedWriter(new FileWriter(outputFile+"_log.txt"));
-		for (GeneticVariant variantData : genotypeData) {
 
-			if (variantData.getAlleleCount()>2) {
+//        BufferedWriter logWriter = new BufferedWriter(new FileWriter(outputFile+"_log.txt"));
+		int i = 0;
+		for (GeneticVariant variantData : genotypeData) {
+			
+			if (variantData.getAlleleCount() > 2) {
 //                System.out.println(variantData1.getAlleleCount());
 				++excludedNonSnpVariants;
 				continue;
 			}
-			
-            float[] dosages = null;
-            
-            dosages = variantData.getSampleDosages();
-            
+
+			float[] dosages = null;
+
+			dosages = variantData.getSampleDosages();
 
 			for (int s1 = 0; s1 < samples.length; ++s1) {
 
@@ -255,67 +257,89 @@ public class Main {
 
 				}
 			}
-		}
-		
-		final DoubleMatrix2D r2 = new DenseDoubleMatrix2D(samples.length, samples.length);
-		for (int s1 = 0; s1 < samples.length; ++s1) {
-			for (int s2 = 0; s2 < samples.length; ++s2) {
-				r2.setQuick(s1, s2, regressionMatrix.getQuick(s1, s2).getRSquare());
+			
+			if(++i % 100 == 0){
+				System.out.println("Processed " + i + " variants");
 			}
-		}		
+			
+		}
+
+		final CSVWriter r2Writer = new CSVWriter(new FileWriter(new File(outputFilePath + ".r2")), '\t', '\0');
+		final String[] r2Output = new String[samples.length + 1];
+		int c = 0;
+		r2Output[c++] = "-";
+		for (int s1 = 0; s1 < samples.length; ++s1) {
+			r2Output[c++] = samples[s1];
+		}
+		r2Writer.writeNext(r2Output);
+
+		final DoubleMatrix2D r2Matrix = new DenseDoubleMatrix2D(samples.length, samples.length);
+		for (int s1 = 0; s1 < samples.length; ++s1) {
+			c = 0;
+			r2Output[c++] = samples[s1];
+			for (int s2 = 0; s2 < samples.length; ++s2) {
+				double r2 = regressionMatrix.getQuick(s1, s2).getRSquare();
+				r2Matrix.setQuick(s1, s2, r2);
+				r2Output[c++] = String.valueOf(r2);
+			}
+			r2Writer.writeNext(r2Output);
+		}
+		r2Writer.close();
 		
+		System.out.println("Created r2 matrix");
+
 		Collapse[] sampleCollapses = new Collapse[samples.length];
 		HashSet<Collapse> collapsedSamples = new HashSet<>();
-		
-		for(int s1 = 0 ; s1 < samples.length ; s1++){
-			
+
+		for (int s1 = 0; s1 < samples.length; s1++) {
+
 			Collapse sampleCollapse = sampleCollapses[s1];
-			
-			if(sampleCollapse == null){
+
+			if (sampleCollapse == null) {
 				sampleCollapse = new Collapse(samples[s1]);
 				collapsedSamples.add(sampleCollapse);
 			}
-			
-			for(int s2 = s1 + 1 ; s2 < samples.length ; s2++){
-				
-				if(r2.getQuick(s1, s2) >= minRToMatch){
+
+			for (int s2 = s1 + 1; s2 < samples.length; s2++) {
+
+				if (r2Matrix.getQuick(s1, s2) >= minRToMatch) {
 					sampleCollapse.addSample(samples[s2]);
-					
-					if(sampleCollapses[s2] != null){
+
+					if (sampleCollapses[s2] != null) {
 						throw new RuntimeException("This is a bug");
 					}
-					
+
 					sampleCollapses[s2] = sampleCollapse;
-					
+
 				}
 			}
-			
-			
+
 		}
-		
+
 		BufferedWriter outputWriter = new BufferedWriter(new FileWriter(outputFile));
-		
+
 		StringBuilder outputLine = new StringBuilder();
-		for(Collapse collapse : collapsedSamples){
-			
+		for (Collapse collapse : collapsedSamples) {
+
 			outputLine.setLength(0);
-			
-			for(String sample : collapse.getSamples()){
-				if(outputLine.length() > 0){
+
+			for (String sample : collapse.getSamples()) {
+				if (outputLine.length() > 0) {
 					outputLine.append(';');
 				}
 				outputLine.append(sample);
 			}
-			
+
+			outputLine.append('\n');
 			outputWriter.write(outputLine.toString());
-			
+
 		}
-		
+
 		outputWriter.close();
-		
+
+		System.out.println("Number of samples before collapsing: " + samples.length);
 		System.out.println("Number of samples after collapsing: " + collapsedSamples.size());
-		
-		
+
 	}
-	
+
 }
