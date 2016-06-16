@@ -4,7 +4,7 @@
 
     <groupId>nl.systemsgenetics</groupId>
     <artifactId>MatchGenotypeSamples</artifactId>
-    <version>1.2-SNAPSHOT</version>
+    <version>1.6-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <name>MatchGenotypeSamples</name>
@@ -18,7 +18,7 @@
 		<dependency>
 			<groupId>nl.systemsgenetics</groupId>
 			<artifactId>Genotype-IO</artifactId>
-			<version>1.0.3-SNAPSHOT</version>
+			<version>1.0.5-SNAPSHOT</version>
 		</dependency>
 		<dependency>
 			<groupId>commons-cli</groupId>
