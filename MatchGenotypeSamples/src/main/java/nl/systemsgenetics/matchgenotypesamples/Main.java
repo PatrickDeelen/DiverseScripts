@@ -33,6 +33,10 @@ public class Main {
 	private static final String HEADER =
 			"  /---------------------------------------\\\n"
 			+ "  |        Match Genotype Samples         |\n"
+            + "  |    between two genotype datsets       |\n"
+            + "  |                                       |\n"
+            + "  |      Dataset 1 should to be the       |\n"
+            + "  |           golden standard             |\n"
 			+ "  |                                       |\n"
 			+ "  |             Patrick Deelen            |\n"
 			+ "  |        patrickdeelen@gmail.com        |\n"
@@ -119,6 +123,11 @@ public class Main {
 		OptionBuilder.withDescription("Use called genotypes. default: False");
 		OptionBuilder.withLongOpt("useCalled");
 		OPTIONS.addOption(OptionBuilder.create("c"));
+        
+        OptionBuilder.withArgName("boolean");
+		OptionBuilder.withDescription("Put missing genotype to homozygous reference. WARNING this is not recomended for most VCFs! Default: False");
+		OptionBuilder.withLongOpt("missingToHomref");
+		OPTIONS.addOption(OptionBuilder.create("hr"));
 
         OptionBuilder.withArgName("boolean");
 		OptionBuilder.withDescription("Test only same alleles. default: False");
@@ -230,6 +239,7 @@ public class Main {
 		}
         
         final boolean useCalledGenotypes = commandLine.hasOption('c');
+        final boolean missingToHomRef = commandLine.hasOption("hr");
         final boolean strictAlleleTest = commandLine.hasOption('s');
         
 		final String outputFilePath = commandLine.getOptionValue('o');
@@ -365,7 +375,7 @@ public class Main {
                     }
                 }
             } else {
-                if (!variantData2.getVariantAlleles().containsAll(variantData1.getVariantAlleles())) {
+                if (!variantData1.getVariantAlleles().containsAll(variantData2.getVariantAlleles())) {
                     ++excludedDifferentAllelesInput2;
                     continue;
                 }
@@ -373,14 +383,24 @@ public class Main {
             
 			++variantsFoundInBoth;
             
+            //missingToHomRef
+            
             float[] variantData1SampleDosages = null;
             if(useCalledGenotypes){
                 variantData1SampleDosages = byteToFloat(variantData1.getSampleCalledDosages());
             } else {
                 variantData1SampleDosages = variantData1.getSampleDosages();
             }
+            
+            if(missingToHomRef){
+                variantData1SampleDosages = recodeMissingToHomozygotRef(variantData1SampleDosages);
+            }
+            
 			float[] variantData2SampleDosages = getPropperAllelsVariant2(variantData1, variantData2, complementSnp, useCalledGenotypes);
             
+            if(missingToHomRef){
+                variantData2SampleDosages = recodeMissingToHomozygotRef(variantData2SampleDosages);
+            }
 
 			for (int s1 = 0; s1 < data1Samples.length; ++s1) {
 
@@ -495,11 +515,20 @@ public class Main {
                 float[] variantData2SampleDosages = variantData2.getSampleDosages();
                 if(!useCalledGenotypes){
                     for(int i = 0; i<variantData2SampleDosages.length; ++i){
-                        variantData2SampleDosages[i] = Math.abs(variantData2SampleDosages[i]-2);
+                        if(variantData2SampleDosages[i]==-1){
+                            variantData2SampleDosages[i] = -1;
+                        } else {
+                            variantData2SampleDosages[i] = Math.abs(variantData2SampleDosages[i]-2);
+                        }
+                        
                     }
                 } else {
                     for(int i = 0; i<variantData2SampleDosages.length; ++i){
-                        variantData2SampleDosages[i] = Math.abs(variantData2.getSampleCalledDosages()[i]-2);
+                        if(variantData2.getSampleCalledDosages()[i] == -1){
+                            variantData2SampleDosages[i] = -1;
+                        } else {
+                            variantData2SampleDosages[i] = Math.abs(variantData2.getSampleCalledDosages()[i]-2);
+                        }
                     }
                 }
                 return variantData2SampleDosages;
@@ -515,15 +544,23 @@ public class Main {
             if(!variantData1.getRefAllele().getComplement().equals(variantData2.getRefAllele())){
                 swapNeeded = true;
             }
-            if(swapNeeded){ 
+            if(swapNeeded){
                 float[] variantData2SampleDosages = variantData2.getSampleDosages();
                 if(!useCalledGenotypes){
                     for(int i = 0; i<variantData2SampleDosages.length; ++i){
-                        variantData2SampleDosages[i] = Math.abs(variantData2SampleDosages[i]-2);
+                        if(variantData2SampleDosages[i]==-1){
+                            variantData2SampleDosages[i] = -1;
+                        } else {
+                            variantData2SampleDosages[i] = Math.abs(variantData2SampleDosages[i]-2);
+                        }
                     }
                 } else {
                     for(int i = 0; i<variantData2SampleDosages.length; ++i){
-                        variantData2SampleDosages[i] = Math.abs(variantData2.getSampleCalledDosages()[i]-2);
+                        if(variantData2.getSampleCalledDosages()[i] == -1){
+                            variantData2SampleDosages[i] = -1;
+                        } else {
+                            variantData2SampleDosages[i] = Math.abs(variantData2.getSampleCalledDosages()[i]-2);
+                        }
                     }
                 }
                 return variantData2SampleDosages;
@@ -543,6 +580,18 @@ public class Main {
             floatValuesByte[i] = sampleCalledDosages[i];
         }
         return floatValuesByte;
+    }
+
+    private static float[] recodeMissingToHomozygotRef(float[] variantData1SampleDosages) {
+        float[] variantData1SampleDosages2 = new float[variantData1SampleDosages.length];
+        for(int i = 0; i<variantData1SampleDosages.length; i++){
+            if(variantData1SampleDosages[i]!=-1){
+                variantData1SampleDosages2[i] = variantData1SampleDosages[i];
+            } else {
+                variantData1SampleDosages2[i] = 2;
+            }
+        }
+        return variantData1SampleDosages2;
     }
 
 	private static class CountBiggerThanOne implements TIntProcedure {

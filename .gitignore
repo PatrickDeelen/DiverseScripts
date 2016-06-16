@@ -6,3 +6,6 @@ CompareGenotypeCalls/target/
 target/*
 CompareGenotypeCalls/target/classes/nl/systemsgenetics/comparegenotypecalls/App_1.class
 *.properties
+CompareGenotypeCalls/target/classes/verion.properties
+*.properties
+CompareGenotypeCalls/target/surefire-reports/nl.systemsgenetics.comparegenotypecalls.AppTest.txt
