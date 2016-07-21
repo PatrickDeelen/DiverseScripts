@@ -8,11 +8,14 @@ package nl.umcg.collapsegenotypedsamples;
 import au.com.bytecode.opencsv.CSVWriter;
 import cern.colt.matrix.tdouble.DoubleMatrix2D;
 import cern.colt.matrix.tdouble.impl.DenseDoubleMatrix2D;
+import gnu.trove.map.TObjectByteMap;
+import gnu.trove.map.hash.TObjectByteHashMap;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.HashSet;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.HelpFormatter;
@@ -227,7 +230,7 @@ public class Main {
 //        BufferedWriter logWriter = new BufferedWriter(new FileWriter(outputFile+"_log.txt"));
 		int i = 0;
 		for (GeneticVariant variantData : genotypeData) {
-			
+
 			if (variantData.getAlleleCount() > 2) {
 //                System.out.println(variantData1.getAlleleCount());
 				++excludedNonSnpVariants;
@@ -257,11 +260,11 @@ public class Main {
 
 				}
 			}
-			
-			if(++i % 100 == 0){
+
+			if (++i % 10000 == 0) {
 				System.out.println("Processed " + i + " variants");
 			}
-			
+
 		}
 
 		final CSVWriter r2Writer = new CSVWriter(new FileWriter(new File(outputFilePath + ".r2")), '\t', '\0');
@@ -285,37 +288,75 @@ public class Main {
 			r2Writer.writeNext(r2Output);
 		}
 		r2Writer.close();
-		
-		System.out.println("Created r2 matrix");
 
-		Collapse[] sampleCollapses = new Collapse[samples.length];
+		//System.out.println("Created r2 matrix");
+		boolean[] samplesAdded = new boolean[samples.length];
 		HashSet<Collapse> collapsedSamples = new HashSet<>();
 
 		for (int s1 = 0; s1 < samples.length; s1++) {
 
-			Collapse sampleCollapse = sampleCollapses[s1];
-
-			if (sampleCollapse == null) {
-				sampleCollapse = new Collapse(samples[s1]);
-				collapsedSamples.add(sampleCollapse);
+			if (samplesAdded[s1]) {
+				continue;
 			}
 
-			for (int s2 = s1 + 1; s2 < samples.length; s2++) {
+			System.out.println("* " + s1);
 
-				if (r2Matrix.getQuick(s1, s2) >= minRToMatch) {
-					sampleCollapse.addSample(samples[s2]);
+			ConcurrentLinkedQueue<Integer> samplesInMergeQue = new ConcurrentLinkedQueue<>();
+			Collapse samplesInMerge = new Collapse(samples[s1]);
 
-					if (sampleCollapses[s2] != null) {
-						throw new RuntimeException("This is a bug");
+			samplesInMergeQue.add(s1);
+			samplesAdded[s1] = true;
+
+			while (!samplesInMergeQue.isEmpty()) {
+				int s2 = samplesInMergeQue.remove();
+				//System.out.println(" - " + s2);
+
+				for (int s3 = s2 + 1; s3 < samples.length; s3++) {
+
+					if (r2Matrix.getQuick(s2, s3) >= minRToMatch) {
+
+						if (!samplesAdded[s3]) {
+							samplesInMergeQue.add(s3);
+							samplesInMerge.addSample(samples[s3]);
+						}
+						samplesAdded[s3] = true;
+
 					}
-
-					sampleCollapses[s2] = sampleCollapse;
-
 				}
+
 			}
+
+			collapsedSamples.add(samplesInMerge);
 
 		}
 
+//		Collapse[] sampleCollapses = new Collapse[samples.length];
+//		HashSet<Collapse> collapsedSamples = new HashSet<>();
+//
+//		for (int s1 = 0; s1 < samples.length; s1++) {
+//
+//			Collapse sampleCollapse = sampleCollapses[s1];
+//
+//			if (sampleCollapse == null) {
+//				sampleCollapse = new Collapse(samples[s1]);
+//				collapsedSamples.add(sampleCollapse);
+//			}
+//
+//			for (int s2 = s1 + 1; s2 < samples.length; s2++) {
+//
+//				if (r2Matrix.getQuick(s1, s2) >= minRToMatch) {
+//					sampleCollapse.addSample(samples[s2]);
+//
+//					if (sampleCollapses[s2] != null) {
+//						throw new RuntimeException("This is a bug");
+//					}
+//
+//					sampleCollapses[s2] = sampleCollapse;
+//
+//				}
+//			}
+//
+//		}
 		BufferedWriter outputWriter = new BufferedWriter(new FileWriter(outputFile));
 
 		StringBuilder outputLine = new StringBuilder();
