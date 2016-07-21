@@ -6,3 +6,4 @@ CompareGenotypeCalls/target/
 target/*
 CompareGenotypeCalls/target/classes/nl/systemsgenetics/comparegenotypecalls/App_1.class
 *.properties
+.Rproj.user
