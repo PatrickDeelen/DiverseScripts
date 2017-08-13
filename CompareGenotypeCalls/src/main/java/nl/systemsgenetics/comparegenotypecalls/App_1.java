@@ -133,9 +133,15 @@ public class App_1 {
 
 		OptionBuilder.withArgName("string");
 		OptionBuilder.hasArgs();
-		OptionBuilder.withDescription("Force chr");
-		OptionBuilder.withLongOpt("chr");
-		OPTIONS.addOption(OptionBuilder.create("c"));
+		OptionBuilder.withDescription("Force chr for dataset 1");
+		OptionBuilder.withLongOpt("chr1");
+		OPTIONS.addOption(OptionBuilder.create("c1"));
+		
+		OptionBuilder.withArgName("string");
+		OptionBuilder.hasArgs();
+		OptionBuilder.withDescription("Force chr for dataset 2");
+		OptionBuilder.withLongOpt("chr2");
+		OPTIONS.addOption(OptionBuilder.create("c2"));
 
 		OptionBuilder.withArgName("double");
 		OptionBuilder.hasArgs();
@@ -172,7 +178,8 @@ public class App_1 {
 		final String snpIdFilterData1;
 		final String data1ProbCall;
 		final String data2ProbCall;
-		final String forceChr;
+		final String data1ForceChr;
+		final String data2ForceChr;
 		final boolean alleleComp;
 
 		try {
@@ -188,7 +195,8 @@ public class App_1 {
 			snpIdFilterData1 = commandLine.getOptionValue("v", null);
 			data1ProbCall = commandLine.getOptionValue("p1", DEFAULT_CALL_P);
 			data2ProbCall = commandLine.getOptionValue("p2", DEFAULT_CALL_P);
-			forceChr = commandLine.getOptionValue("c", null);
+			data1ForceChr = commandLine.getOptionValue("c1", null);
+			data2ForceChr = commandLine.getOptionValue("c2", null);
 			alleleComp = commandLine.hasOption("ac");
 
 		} catch (ParseException ex) {
@@ -210,8 +218,8 @@ public class App_1 {
 		}
 		System.out.println("Data 1 prob call: " + data1ProbCall);
 		System.out.println("Data 2 prob call: " + data2ProbCall);
-		if (forceChr != null) {
-			System.out.println("Force Chr: " + forceChr);
+		if (data1ForceChr != null) {
+			System.out.println("Force Chr: " + data1ForceChr);
 		}
 		System.out.println("Allele Complement Check: " + alleleComp);
 
@@ -243,7 +251,7 @@ public class App_1 {
 
 
 
-		RandomAccessGenotypeData data1 = RandomAccessGenotypeDataReaderFormats.valueOfSmart(data1Type.toUpperCase()).createFilteredGenotypeData(data1Path, 1024, snpIdFilter, data1SampleFilter, forceChr, Double.parseDouble(data1ProbCall));
+		RandomAccessGenotypeData data1 = RandomAccessGenotypeDataReaderFormats.valueOfSmart(data1Type.toUpperCase()).createFilteredGenotypeData(data1Path, 1024, snpIdFilter, data1SampleFilter, data1ForceChr, Double.parseDouble(data1ProbCall));
 
 		VariantFilterSeqPos seqPosFilter = new VariantFilterSeqPos();
 		for (GeneticVariant data1Var : data1) {
@@ -252,7 +260,7 @@ public class App_1 {
 
 
 
-		RandomAccessGenotypeData data2 = RandomAccessGenotypeDataReaderFormats.valueOfSmart(data2Type.toUpperCase()).createFilteredGenotypeData(data2Path, 1024, seqPosFilter, data2SampleFilter, forceChr, Double.parseDouble(data2ProbCall));
+		RandomAccessGenotypeData data2 = RandomAccessGenotypeDataReaderFormats.valueOfSmart(data2Type.toUpperCase()).createFilteredGenotypeData(data2Path, 1024, seqPosFilter, data2SampleFilter, data2ForceChr, Double.parseDouble(data2ProbCall));
 
 		//Do here to optimize trityper 
 		data2 = new VariantFilterableGenotypeDataDecorator(data2, new VariantQcChecker(Float.valueOf(mafFilterData2), 0, 0));

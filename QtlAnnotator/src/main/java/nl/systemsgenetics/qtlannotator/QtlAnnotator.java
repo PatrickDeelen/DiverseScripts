@@ -30,8 +30,8 @@ public class QtlAnnotator {
 	private static final int DEFAULT_WINDOW = 250000;
 	private static final double DEFAULT_R2 = 0.8;
 
-	private static final String HEADER =
-			"  /---------------------------------------\\\n"
+	private static final String HEADER
+			= "  /---------------------------------------\\\n"
 			+ "  |             QTL Annotator             |\n"
 			+ "  |                                       |\n"
 			+ "  |             Patrick Deelen            |\n"
@@ -41,7 +41,7 @@ public class QtlAnnotator {
 			+ "  |        Department of Genetics         |\n"
 			+ "  |  University Medical Center Groningen  |\n"
 			+ "  \\---------------------------------------/";
-	
+
 	static {
 
 		OPTIONS = new Options();
@@ -110,7 +110,7 @@ public class QtlAnnotator {
 			Thread.sleep(25); //Allows flush to complete
 		} catch (InterruptedException ex) {
 		}
-		
+
 		final File qtlFile;
 		final File outputFile;
 		final File outputFileSummary;
@@ -124,7 +124,7 @@ public class QtlAnnotator {
 			final CommandLine commandLine = new PosixParser().parse(OPTIONS, args, false);
 
 			qtlFile = new File(commandLine.getOptionValue('q'));
-			
+
 			if (commandLine.hasOption("o")) {
 				outputFile = new File(commandLine.getOptionValue('o') + ".txt");
 				outputFileSummary = new File(commandLine.getOptionValue('o') + "_summary.txt");
@@ -132,13 +132,13 @@ public class QtlAnnotator {
 				outputFile = new File(qtlFile.getAbsolutePath() + "_annotated.txt");
 				outputFileSummary = new File(qtlFile.getAbsolutePath() + "_annotated_summary.txt");
 			}
-			
+
 			annotationFile = new File(commandLine.getOptionValue('a'));
 			genotypeDataType = commandLine.getOptionValue('G');
 			genotypeDataPaths = commandLine.getOptionValues('g');
 
 			if (commandLine.hasOption("r2")) {
-				minR2 = Integer.parseInt(commandLine.getOptionValue("r2"));
+				minR2 = Double.parseDouble(commandLine.getOptionValue("r2"));
 			} else {
 				minR2 = DEFAULT_R2;
 			}
@@ -182,7 +182,6 @@ public class QtlAnnotator {
 			}
 		}
 
-
 		int numberOfAnnotations = 0;
 		int numberOfPosWithAnnotation = 0;
 
@@ -217,11 +216,10 @@ public class QtlAnnotator {
 				currentAnnotationPos[i].add(nextLine[i + 2]);
 			}
 
-
 		}
 		reader.close();
 
-		RandomAccessGenotypeData genotypeData = RandomAccessGenotypeDataReaderFormats.valueOf(genotypeDataType.toUpperCase()).createGenotypeData(genotypeDataPaths, 10000);
+		RandomAccessGenotypeData genotypeData = RandomAccessGenotypeDataReaderFormats.valueOfSmart(genotypeDataType.toUpperCase()).createGenotypeData(genotypeDataPaths, 10000);
 
 		QTLTextFile eQTLsTextFile = new QTLTextFile(qtlFile.getAbsolutePath(), false);
 
@@ -250,7 +248,7 @@ public class QtlAnnotator {
 		for (Iterator<EQTL> eQtlIt = eQTLsTextFile.getEQtlIterator(); eQtlIt.hasNext();) {
 
 			++numberOfQtls;
-			
+
 			EQTL eQtl = eQtlIt.next();
 			String chr = eQtl.getRsChr() + "";
 			int pos = eQtl.getRsChrPos();
@@ -284,23 +282,26 @@ public class QtlAnnotator {
 						continue otherVariants;
 					}
 
-					Ld ld = variant.calculateLd(qtlVariant);
-
-					if (ld.getR2() < minR2) {
-						continue otherVariants;
-					}
-
 					annotation = annotationMap.get(variant.getSequenceName(), variant.getStartPos());
 
 					if (annotation != null) {
+
+						Ld ld = variant.calculateLd(qtlVariant);
+						if (ld.getR2() < minR2) {
+							continue otherVariants;
+						}
+
 						annotated = true;
 						for (int i = 0; i < annotatationNames.length; ++i) {
 							if (qtlAnnotations[i].length() != 0) {
 								qtlAnnotations[i].append(';');
 							}
-							qtlAnnotations[i].append(annotationsToString(annotation[i]));
+							
+							qtlAnnotations[i].append(annotationsToString(annotation[i]) + " (r2 " + ld.getR2() + " D' " + ld.getDPrime() +  ")");
 						}
 					}
+
+					
 
 				}
 
@@ -317,15 +318,15 @@ public class QtlAnnotator {
 			}
 
 			mappingReportWriter.writeNext(qtlAnnotatedOutput);
-			
-			if(annotated){
+
+			if (annotated) {
 				++numberOfQtlsWithAnnotation;
 			}
 
 		}
 
 		mappingReportWriter.close();
-		
+
 		BufferedWriter outputWriter = new BufferedWriter(new FileWriter(outputFileSummary));
 		outputWriter.append("QTL file: " + qtlFile.getAbsolutePath());
 		outputWriter.append('\n');
@@ -343,7 +344,7 @@ public class QtlAnnotator {
 		outputWriter.append('\n');
 		outputWriter.append("r2: " + minR2);
 		outputWriter.append('\n');
-		
+
 		outputWriter.append('\n');
 		outputWriter.append("Number of loaded annotations: " + numberOfAnnotations);
 		outputWriter.append('\n');
@@ -362,22 +363,22 @@ public class QtlAnnotator {
 		System.out.println("Annotation done");
 
 	}
-	
-	private static StringBuilder annotationsToString(HashSet<String> annotations){
-		
+
+	private static StringBuilder annotationsToString(HashSet<String> annotations) {
+
 		StringBuilder result = new StringBuilder();
-		
+
 		boolean first = true;
-		for(String annotation : annotations){
-			if(first){
+		for (String annotation : annotations) {
+			if (first) {
 				first = false;
 			} else {
 				result.append(',');
 			}
 			result.append(annotation);
 		}
-		
+
 		return result;
-		
+
 	}
 }
