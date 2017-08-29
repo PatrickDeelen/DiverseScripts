@@ -98,7 +98,7 @@ public class QtlQuery {
 
 		OptionBuilder.withArgName("path");
 		OptionBuilder.hasArg();
-		OptionBuilder.withDescription("Search file. chr<tab>pos<tab>.... use headers");
+		OptionBuilder.withDescription("Search file. chr<tab>pos<tab>.... use headers. Addiotional columns will be added to output file");
 		OptionBuilder.withLongOpt("search");
 		OptionBuilder.isRequired();
 		OPTIONS.addOption(OptionBuilder.create('s'));
@@ -182,7 +182,12 @@ public class QtlQuery {
 				}
 			}
 		}
-
+		
+		System.out.println();
+		System.out.println("WARNING:  Alleles in eQTL file must be coded in same strand as genotype data.");
+		System.out.println("WARNING2: Becarefull in the interpertation of GWAS risk alleles. They might not be in the same strand as genotype data.");
+		System.out.println();
+		
 		RandomAccessGenotypeData genotypeData = RandomAccessGenotypeDataReaderFormats.valueOfSmart(genotypeDataType.toUpperCase()).createGenotypeData(genotypeDataPaths, 10000);
 
 		QTLTextFile eQTLsTextFile = new QTLTextFile(qtlFile.getAbsolutePath(), false);
