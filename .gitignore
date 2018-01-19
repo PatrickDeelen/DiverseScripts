@@ -10,3 +10,6 @@ CompareGenotypeCalls/target/classes/nl/systemsgenetics/comparegenotypecalls/App_
 CompareGenotypeCalls/target/classes/verion.properties
 *.properties
 CompareGenotypeCalls/target/surefire-reports/nl.systemsgenetics.comparegenotypecalls.AppTest.txt
+Thesis/.Rhistory
+*.class
+CompareGenotypeCalls/target/classes/nl/systemsgenetics/comparegenotypecalls/App_1.class

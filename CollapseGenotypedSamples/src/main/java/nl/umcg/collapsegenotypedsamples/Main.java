@@ -46,7 +46,7 @@ public class Main {
 			+ "  |             Patrick Deelen            |\n"
 			+ "  |        patrickdeelen@gmail.com        |\n"
 			+ "  |                                       |\n"
-			+ "  |     Genomics Coordication Center      |\n"
+			+ "  |     Genomics Coordination Center      |\n"
 			+ "  |        Department of Genetics         |\n"
 			+ "  |  University Medical Center Groningen  |\n"
 			+ "  \\---------------------------------------/";
