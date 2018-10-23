@@ -32,7 +32,7 @@ public class Test {
 		
 		
 		TTest y = new TTest();
-		y.tTest(a, a)
+		//y.tTest(a, a)
 		
 		
 	}

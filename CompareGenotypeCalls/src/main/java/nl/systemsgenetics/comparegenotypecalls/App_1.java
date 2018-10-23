@@ -39,8 +39,8 @@ public class App_1 {
 	static final Pattern TAB_PATTERN = Pattern.compile("\\t");
 	static final String DEFAULT_CALL_P = "0.7";
 	private static final Options OPTIONS;
-	private static final String HEADER =
-			"  /---------------------------------------\\\n"
+	private static final String HEADER
+			= "  /---------------------------------------\\\n"
 			+ "  |         Compare genotype calls        |\n"
 			+ "  |                                       |\n"
 			+ "  |             Patrick Deelen            |\n"
@@ -136,7 +136,7 @@ public class App_1 {
 		OptionBuilder.withDescription("Force chr for dataset 1");
 		OptionBuilder.withLongOpt("chr1");
 		OPTIONS.addOption(OptionBuilder.create("c1"));
-		
+
 		OptionBuilder.withArgName("string");
 		OptionBuilder.hasArgs();
 		OptionBuilder.withDescription("Force chr for dataset 2");
@@ -150,14 +150,18 @@ public class App_1 {
 		OPTIONS.addOption(OptionBuilder.create("m2"));
 
 		OptionBuilder.withArgName("boolean");
-		OptionBuilder.withDescription("If set check for swapped Alleles");
+		OptionBuilder.withDescription("If set check for swapped Alleles. Will skip indels");
 		OptionBuilder.withLongOpt("alleleComplement");
 		OPTIONS.addOption(OptionBuilder.create("ac"));
+
+		OptionBuilder.withArgName("boolean");
+		OptionBuilder.withDescription("Check genotype concordance even if alleles between variants are subsets of each other");
+		OptionBuilder.withLongOpt("subsetVariantAlleles");
+		OPTIONS.addOption(OptionBuilder.create("sva"));
 
 	}
 
 	public static void main(String[] args) throws Exception {
-
 
 		System.out.println(HEADER);
 		System.out.println();
@@ -166,7 +170,6 @@ public class App_1 {
 			Thread.sleep(25); //Allows flush to complete
 		} catch (InterruptedException ex) {
 		}
-
 
 		final String data1Type;
 		final String data1Path;
@@ -181,6 +184,7 @@ public class App_1 {
 		final String data1ForceChr;
 		final String data2ForceChr;
 		final boolean alleleComp;
+		final boolean subsetAlleles;
 
 		try {
 			final CommandLine commandLine = new PosixParser().parse(OPTIONS, args, false);
@@ -198,6 +202,7 @@ public class App_1 {
 			data1ForceChr = commandLine.getOptionValue("c1", null);
 			data2ForceChr = commandLine.getOptionValue("c2", null);
 			alleleComp = commandLine.hasOption("ac");
+			subsetAlleles = commandLine.hasOption("sva");
 
 		} catch (ParseException ex) {
 			System.err.println("Invalid command line arguments: ");
@@ -245,12 +250,6 @@ public class App_1 {
 			snpIdFilter = new VariantIdIncludeFilter(snps);
 		}
 
-
-
-
-
-
-
 		RandomAccessGenotypeData data1 = RandomAccessGenotypeDataReaderFormats.valueOfSmart(data1Type.toUpperCase()).createFilteredGenotypeData(data1Path, 1024, snpIdFilter, data1SampleFilter, data1ForceChr, Double.parseDouble(data1ProbCall));
 
 		VariantFilterSeqPos seqPosFilter = new VariantFilterSeqPos();
@@ -258,13 +257,10 @@ public class App_1 {
 			seqPosFilter.addSeqPos(data1Var);
 		}
 
-
-
 		RandomAccessGenotypeData data2 = RandomAccessGenotypeDataReaderFormats.valueOfSmart(data2Type.toUpperCase()).createFilteredGenotypeData(data2Path, 1024, seqPosFilter, data2SampleFilter, data2ForceChr, Double.parseDouble(data2ProbCall));
 
 		//Do here to optimize trityper 
 		data2 = new VariantFilterableGenotypeDataDecorator(data2, new VariantQcChecker(Float.valueOf(mafFilterData2), 0, 0));
-
 
 		System.out.println("Reading data 2 samples, total: " + data2.getSampleNames().length);
 
@@ -305,7 +301,6 @@ public class App_1 {
 		int skippedVar = 0;
 		int comparedVar = 0;
 
-
 		BufferedWriter outSnp = new BufferedWriter(new FileWriter(outputFilePath + ".variants"));
 		outSnp.append("snp\tchr\tpos\talleles\tr2\tidenticalCall\tsampleCount\tmaData1\tmafData1\tmaData2\tmafData2\tcallData1\tcallData2\n");
 
@@ -323,12 +318,16 @@ public class App_1 {
 			sampleIndenticalCallCount.put(sample, new AtomicInteger());
 		}
 
-
 		for (GeneticVariant data1Var : data1) {
 
 			++i;
 			if (i % 1000 == 0) {
 				System.out.println("Variant: " + i);
+			}
+			
+			//If checking for comploment only work with SNPs
+			if(alleleComp && !data1Var.isSnp()){
+				continue;
 			}
 
 			GeneticVariant data2Var = null;
@@ -346,10 +345,23 @@ public class App_1 {
 					swapNeeded = true;
 				}
 				//System.out.println(swapNeeded);
-				if (swapNeeded ? !data1Var.getVariantAlleles().getComplement().sameAlleles(data2Var.getVariantAlleles()) : !data1Var.getVariantAlleles().sameAlleles(data2Var.getVariantAlleles())) {
-					System.err.println("Different alleles for " + data1Var.getPrimaryVariantId() + " " + data1Var.getVariantAlleles() + " vs " + data2Var.getVariantAlleles() + " " + data1Var.getSequenceName() + ":" + data1Var.getStartPos() + " vs " + data2Var.getSequenceName() + ":" + data2Var.getStartPos());
-					++skippedVar;
-					continue;
+
+				if (subsetAlleles) {
+					if (swapNeeded
+							? !(data1Var.getVariantAlleles().getComplement().containsAll(data2Var.getVariantAlleles()) || data2Var.getVariantAlleles().getComplement().containsAll(data1Var.getVariantAlleles()))
+							: !(data1Var.getVariantAlleles().containsAll(data2Var.getVariantAlleles()) || data2Var.getVariantAlleles().containsAll(data1Var.getVariantAlleles()))) {
+						System.err.println("Different alleles for " + data1Var.getPrimaryVariantId() + " " + data1Var.getVariantAlleles() + " vs " + data2Var.getVariantAlleles() + " " + data1Var.getSequenceName() + ":" + data1Var.getStartPos() + " vs " + data2Var.getSequenceName() + ":" + data2Var.getStartPos());
+						++skippedVar;
+						continue;
+					}
+				} else {
+					if (swapNeeded
+							? !data1Var.getVariantAlleles().getComplement().sameAlleles(data2Var.getVariantAlleles()) 
+							: !data1Var.getVariantAlleles().sameAlleles(data2Var.getVariantAlleles())) {
+						System.err.println("Different alleles for " + data1Var.getPrimaryVariantId() + " " + data1Var.getVariantAlleles() + " vs " + data2Var.getVariantAlleles() + " " + data1Var.getSequenceName() + ":" + data1Var.getStartPos() + " vs " + data2Var.getSequenceName() + ":" + data2Var.getStartPos());
+						++skippedVar;
+						continue;
+					}
 				}
 
 				++comparedVar;
@@ -408,7 +420,6 @@ public class App_1 {
 
 				}
 
-
 				outSnp.append(data1Var.getPrimaryVariantId());
 				outSnp.append('\t');
 				outSnp.append(data1Var.getSequenceName());
@@ -436,12 +447,9 @@ public class App_1 {
 				outSnp.append(String.valueOf(snpData2CallCount / (double) sharedSamples.size()));
 				outSnp.append('\n');
 
-
-
 			}
 
 			//break;
-
 		}
 
 		outSnp.close();
