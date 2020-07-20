@@ -72,6 +72,7 @@ public class App_1 {
 				+ "* SHAPEIT2 - shapeit2 phased haplotypes .haps & .sample\n"
 				+ "* GEN - Oxford .gen & .sample\n"
 				+ "* GENFOLDER - matches all Oxford .gen & .sample\n"
+				+ "* BGEN - Oxford .bgen & optionally .sample\n"
 				+ "* TRITYPER - TriTyper format folder");
 		OptionBuilder.withLongOpt("data1Type");
 		OptionBuilder.isRequired();
@@ -94,6 +95,7 @@ public class App_1 {
 				+ "* SHAPEIT2 - shapeit2 phased haplotypes .haps & .sample\n"
 				+ "* GEN - Oxford .gen & .sample\n"
 				+ "* GENFOLDER - matches all Oxford .gen & .sample\n"
+				+ "* BGEN - Oxford .bgen & optionally .sample\n"
 				+ "* TRITYPER - TriTyper format folder");
 		OptionBuilder.withLongOpt("data2Type");
 		OptionBuilder.isRequired();
@@ -324,9 +326,9 @@ public class App_1 {
 			if (i % 1000 == 0) {
 				System.out.println("Variant: " + i);
 			}
-			
+
 			//If checking for comploment only work with SNPs
-			if(alleleComp && !data1Var.isSnp()){
+			if (alleleComp && !data1Var.isSnp()) {
 				continue;
 			}
 
@@ -356,7 +358,7 @@ public class App_1 {
 					}
 				} else {
 					if (swapNeeded
-							? !data1Var.getVariantAlleles().getComplement().sameAlleles(data2Var.getVariantAlleles()) 
+							? !data1Var.getVariantAlleles().getComplement().sameAlleles(data2Var.getVariantAlleles())
 							: !data1Var.getVariantAlleles().sameAlleles(data2Var.getVariantAlleles())) {
 						System.err.println("Different alleles for " + data1Var.getPrimaryVariantId() + " " + data1Var.getVariantAlleles() + " vs " + data2Var.getVariantAlleles() + " " + data1Var.getSequenceName() + ":" + data1Var.getStartPos() + " vs " + data2Var.getSequenceName() + ":" + data2Var.getStartPos());
 						++skippedVar;
