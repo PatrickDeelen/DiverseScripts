@@ -21,6 +21,15 @@ covidResWeek6_B <- covidResWeek6_B[match(covidRes$PSEUDOIDEXT, covidResWeek6_B$P
 covidResWeek8_B <- merge(covidRes[,1,drop=F],covidResWeek8, by = "PSEUDOIDEXT", all.x = T, all.y=F)
 covidResWeek8_B <- covidResWeek8_B[match(covidRes$PSEUDOIDEXT, covidResWeek8_B$PSEUDOIDEXT)]
 
+str(covidRes)
+
+covidRes2 <- merge(covidRes,covidResWeek8, by = "PSEUDOIDEXT", all.x = T, all.y=F)
+
+covidRes2[covidRes2 == 9999] <- NA
+covidRes2[covidRes2 == 8888] <- NA
+covidRes2[covidRes2 == "9999"] <- NA
+covidRes2[covidRes2 == "8888"] <- NA
+
 
 demo = fread("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/demographics/Participant (Pa_99_G).dat",header=T,data.table=F)
 
@@ -94,8 +103,9 @@ z <- lapply(keysNederland, agrep, x = tolower(covidRes$COVID87D[zomervakantieGan
 thuisBlijvers <- unique(do.call(c, z))
 
 length(thuisBlijvers) * 100 / sum(zomervakantieGangers)
+100 - (length(thuisBlijvers) * 100 / sum(zomervakantieGangers))
 
-
+0.36 * 0.38
 
 
 
@@ -131,22 +141,32 @@ write.table(matches, file = "landMatch.txt", quote = F, sep = "\t")
 risicoLanden[67]
 
 
+query("COVID76")
 
-
-  COVID76 <- factor(covidRes[["COVID76"]], exclude = c("8888", "9999"), levels = c("Minder dan 3 maanden", "3 maanden", "6 maanden", "1 jaar", "1,5 jaar", "2 jaar", "3 jaar", "Langer dan 3 jaar", "Weet ik niet"))
+COVID76 <- factor(covidRes[["COVID76"]], exclude = c("8888", "9999", "Weet ik niet"), levels = c("Minder dan 3 maanden", "3 maanden", "6 maanden", "1 jaar", "1,5 jaar", "2 jaar", "3 jaar", "Langer dan 3 jaar"))
 
 x <- table(COVID76)
 y <- (x *100)/sum(x)
+
+
+
 
 rpng(width = 800, height = 800)
 par(mar = c(12, 4, 4, 2) + 0.1)
 barplot(y, ylab = "Percentage deelnemers", las = 3, main = "Hoe lang denkt u dat de pandemie nog gaat duren?")
 dev.off()
 
+query("COVID80")
 query("COVID81")
-COVID81 <- factor(covidRes[["COVID81"]], exclude = c("8888", "9999"), levels = c("Minder dan 3 maanden", "3 maanden", "6 maanden", "1 jaar", "1,5 jaar", "2 jaar", "3 jaar", "Langer dan 3 jaar", "Weet ik niet"))
 
-x <- table(COVID81)
+covidRes$COVID81_B <- covidRes$COVID81
+covidRes$COVID81_B[covidRes$COVID80 == "Nee"] <- "Nooit"
+covidRes$COVID81_B[covidRes$COVID80 == "Weet ik niet"] <- "Weet ik niet"
+
+
+COVID81_B <- factor(covidRes[["COVID81_B"]], exclude = c("8888", "9999"), levels = c("Minder dan 3 maanden", "3 maanden", "6 maanden", "1 jaar", "1,5 jaar", "2 jaar", "3 jaar", "Langer dan 3 jaar", "Weet ik niet", "Nooit"))
+
+x <- table(COVID81_B)
 y <- (x *100)/sum(x)
 
 rpng(width = 800, height = 800)
@@ -181,7 +201,7 @@ y <- (x *100)/sum(x)
 pie(y, main = "Laat u zich vaccineren als het\nvaccin tegen COVID19 beschikbaar is?")
 dev.off()
 
-
+wilcox.test()
 
 
 query("COVID78")
@@ -418,7 +438,7 @@ dev.off()
 
 
 
-onderwijsMeerdereKinderen <- covidRes$COVID99G[!is.na(covidRes$COVID14A1_COVID14B1) & covidRes$COVID14A1_COVID14B1 >=3 ]
+onderwijsMeerdereKinderen <- covidRes$COVID99G[!is.na(covidRes$COVID14A1_COVID14B1) & covidRes$COVID14A1_COVID14B1 >=1 ]
 x <- table(factor(onderwijsMeerdereKinderen, exclude = c("8888", "9999", "Niet van toepassing")))
 y <- (x *100)/sum(x)
 rpng(width = 800, height = 800)
@@ -485,3 +505,29 @@ pie(y, main = covidLab[covidLab$PSEUDOIDEXT==q,2])
 dev.off()
 
 print(levels(factor(covidRes[[q]], exclude = c("8888", "9999", "Niet van toepassing"))), sep = "\n")
+
+covidRes2SchoolSub <- covidRes2[(!is.na(covidRes2$COVID14A1_COVID14B1) & covidRes2$COVID14A1_COVID14B1 > 0) & (!is.na(covidRes2$COVID99G) & (covidRes2$COVID99G == "Helemaal mee eens" | covidRes2$COVID99G == "Helemaal mee oneens")),]
+
+schoolFac <- factor(covidRes2SchoolSub$COVID99G, levels = c("Helemaal mee eens", "Helemaal mee oneens"))
+
+tp <- sapply(covidRes2SchoolSub, function(x){
+  if(is.numeric(x)){
+    x2 <- x[!is.na(x)]
+    if(length(x2) > 100){
+      return(t.test(x2 ~ schoolFac[!is.na(x)])$p.value)
+    } else {
+      return(1)
+    }
+    
+  } else {
+    return (1)
+  }
+})
+sort(tp, decreasing = T)
+
+
+t.test(covidRes2SchoolSub$COVID14A1_COVID14B1 ~ schoolFac)
+
+t.test(covidRes2SchoolSub$COVID14A1_B ~ schoolFac)
+
+query("COVID14A1")
