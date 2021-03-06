@@ -531,3 +531,130 @@ t.test(covidRes2SchoolSub$COVID14A1_COVID14B1 ~ schoolFac)
 t.test(covidRes2SchoolSub$COVID14A1_B ~ schoolFac)
 
 query("COVID14A1")
+
+
+
+
+
+
+
+
+postcode <- fread("./analysis/province/pc6hnr20190801_gwb.csv")
+prov <- fread("./analysis/province/Gemeenten alfabetisch 2020.txt")
+
+str(postcode)
+
+postcode$Provincienaam <- prov$Provincienaam[match(postcode$Gemeente2019, prov$Gemeentecode)]
+
+postcode$PC4 <- substr(postcode$PC6 ,1,4)
+
+covidRes$prov <- postcode$Provincienaam[match(covidRes$COVID45, postcode$PC4)]
+
+covidRes$prov2 <- covidRes$prov
+covidRes$prov2[!is.na(covidRes$prov2) & !(covidRes$prov2 == "Drenthe" | covidRes$prov2 == "Groningen" | covidRes$prov2 == "Friesland") ] <- "Rest van Nederland"
+covidRes$prov2 <- as.factor(covidRes$prov2)
+table(covidRes$prov2)
+
+table(postcode$Provincienaam[match(covidRes$COVID45, postcode$PC4)], useNA = "always") * 100 / nrow(covidRes)
+
+
+
+query("COVID75")
+
+x <- table(factor(covidRes[["COVID75"]], exclude = c("8888", "9999")), covidRes$prov2)
+apply(x, 2, function(a){
+  return(a * 100 / sum(a))
+})
+chisq.test(x[,c(1,3,4)])
+
+
+covidResNoorden <- covidRes[!is.na(covidRes$prov2) & covidRes$prov2 != "Rest van Nederland"]
+
+x <- table(factor(covidResNoorden[["COVID87C"]], exclude = c("8888", "9999")))
+y <- (x *100)/sum(x)
+y["Ja, voor 1 september"] + y["Ja, zowel voor als na 1 september"]
+
+zomervakantieGangers <- covidResNoorden[["COVID87C"]] == "Ja, voor 1 september" | covidResNoorden[["COVID87C"]] == "Ja, zowel voor als na 1 september"
+
+z <- lapply(keysNederland, agrep, x = tolower(covidResNoorden$COVID87D[zomervakantieGangers]))
+
+thuisBlijvers <- unique(do.call(c, z))
+
+length(thuisBlijvers) * 100 / sum(zomervakantieGangers)
+100 - (length(thuisBlijvers) * 100 / sum(zomervakantieGangers))
+
+((100 - (length(thuisBlijvers) * 100 / sum(zomervakantieGangers))) / 100) * ((y["Ja, voor 1 september"] + y["Ja, zowel voor als na 1 september"]) / 100)
+
+
+
+
+covidResRest <- covidRes[!is.na(covidRes$prov2) & covidRes$prov2 == "Rest van Nederland"]
+
+x <- table(factor(covidResRest[["COVID87C"]], exclude = c("8888", "9999")))
+y <- (x *100)/sum(x)
+y["Ja, voor 1 september"] + y["Ja, zowel voor als na 1 september"]
+
+zomervakantieGangers <- covidResRest[["COVID87C"]] == "Ja, voor 1 september" | covidResRest[["COVID87C"]] == "Ja, zowel voor als na 1 september"
+
+z <- lapply(keysNederland, agrep, x = tolower(covidResRest$COVID87D[zomervakantieGangers]))
+
+thuisBlijvers <- unique(do.call(c, z))
+
+length(thuisBlijvers) * 100 / sum(zomervakantieGangers)
+100 - (length(thuisBlijvers) * 100 / sum(zomervakantieGangers))
+
+((100 - (length(thuisBlijvers) * 100 / sum(zomervakantieGangers))) / 100) * ((y["Ja, voor 1 september"] + y["Ja, zowel voor als na 1 september"]) / 100)
+
+
+covidResRest <- covidRes[!is.na(covidRes$prov2) & covidRes$prov2 == "Drenthe"]
+
+x <- table(factor(covidResRest[["COVID87C"]], exclude = c("8888", "9999")))
+y <- (x *100)/sum(x)
+y["Ja, voor 1 september"] + y["Ja, zowel voor als na 1 september"]
+
+zomervakantieGangers <- covidResRest[["COVID87C"]] == "Ja, voor 1 september" | covidResRest[["COVID87C"]] == "Ja, zowel voor als na 1 september"
+
+z <- lapply(keysNederland, agrep, x = tolower(covidResRest$COVID87D[zomervakantieGangers]))
+
+thuisBlijvers <- unique(do.call(c, z))
+
+length(thuisBlijvers) * 100 / sum(zomervakantieGangers)
+100 - (length(thuisBlijvers) * 100 / sum(zomervakantieGangers))
+
+((100 - (length(thuisBlijvers) * 100 / sum(zomervakantieGangers))) / 100) * ((y["Ja, voor 1 september"] + y["Ja, zowel voor als na 1 september"]) / 100)
+
+
+covidResRest <- covidRes[!is.na(covidRes$prov2) & covidRes$prov2 == "Groningen"]
+
+x <- table(factor(covidResRest[["COVID87C"]], exclude = c("8888", "9999")))
+y <- (x *100)/sum(x)
+y["Ja, voor 1 september"] + y["Ja, zowel voor als na 1 september"]
+
+zomervakantieGangers <- covidResRest[["COVID87C"]] == "Ja, voor 1 september" | covidResRest[["COVID87C"]] == "Ja, zowel voor als na 1 september"
+
+z <- lapply(keysNederland, agrep, x = tolower(covidResRest$COVID87D[zomervakantieGangers]))
+
+thuisBlijvers <- unique(do.call(c, z))
+
+length(thuisBlijvers) * 100 / sum(zomervakantieGangers)
+100 - (length(thuisBlijvers) * 100 / sum(zomervakantieGangers))
+
+((100 - (length(thuisBlijvers) * 100 / sum(zomervakantieGangers))) / 100) * ((y["Ja, voor 1 september"] + y["Ja, zowel voor als na 1 september"]) / 100)
+
+
+covidResRest <- covidRes[!is.na(covidRes$prov2) & covidRes$prov2 == "Friesland"]
+
+x <- table(factor(covidResRest[["COVID87C"]], exclude = c("8888", "9999")))
+y <- (x *100)/sum(x)
+y["Ja, voor 1 september"] + y["Ja, zowel voor als na 1 september"]
+
+zomervakantieGangers <- covidResRest[["COVID87C"]] == "Ja, voor 1 september" | covidResRest[["COVID87C"]] == "Ja, zowel voor als na 1 september"
+
+z <- lapply(keysNederland, agrep, x = tolower(covidResRest$COVID87D[zomervakantieGangers]))
+
+thuisBlijvers <- unique(do.call(c, z))
+
+length(thuisBlijvers) * 100 / sum(zomervakantieGangers)
+100 - (length(thuisBlijvers) * 100 / sum(zomervakantieGangers))
+
+((100 - (length(thuisBlijvers) * 100 / sum(zomervakantieGangers))) / 100) * ((y["Ja, voor 1 september"] + y["Ja, zowel voor als na 1 september"]) / 100)
