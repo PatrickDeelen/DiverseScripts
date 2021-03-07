@@ -72,7 +72,7 @@ missing <- sapply(vls, function(vl){
 
 str(missing)
 
-hist(missing, breaks = 100)
+hist(missing, breaks = 100, ylim = c(0,1000))
 dev.off()
 
 ppvl <- apply(missing, 2, function(x){
@@ -81,21 +81,46 @@ ppvl <- apply(missing, 2, function(x){
 barplot(ppvl)
 dev.off()
 
-qpp <- apply(missing, 1, function(x){
+colnames(missing)[1:12]
+
+participatedFirstHalf <- apply(missing[,c(1:12)], 1, function(x){
+  any(x <= 5)
+})
+
+participatedSecondHalf <- apply(missing[,c(13:19)], 1, function(x){
+  any(x <= 5)
+})
+
+sum(participatedFirstHalf)
+sum(participatedSecondHalf)
+
+
+participatedBothHalf <- participatedFirstHalf & participatedSecondHalf
+sum(participatedBothHalf)
+
+
+
+  qpp <- apply(missing[participatedBothHalf,], 1, function(x){
   sum(x <= 5)
 })
+table(qpp)
+
+
 
 x <- apply(missing[names(qpp)[qpp==0],], 1, function(x){sum(x < 100)})
 table(x)
 names(x)[x>10]
 
-head(missing[names(qpp)[qpp==0],], n = 10)
+p <- names(qpp)[qpp>=1]
 
-missing["532a5382-d676-4dd2-afff-bae49455275d",]
+missing2 <- missing[p,] 
 
-Dpheno2["f2c6fb43-c4df-4277-a4d9-a486a737d8b7",]
+y <- apply(missing2[,-c(1:4)], 1, function(x){
+  sum(x > 5 & x<100)
+})
 
-table(qpp)
+barplot(table(y))
+  dev.off()
 
 rpng(width = 1000, height = 1000)
 barplot(table(qpp))
