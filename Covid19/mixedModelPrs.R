@@ -20,33 +20,34 @@ vragen <- vragen[vragen!=""]
 
 pheno3 <- merge(pheno2, prs, by = "PROJECT_PSEUDO_ID")
 
-vragenLong <- reshape(pheno3[, c("PROJECT_PSEUDO_ID", vragen, confounders, "Neuroticism")], direction = "long", idvar = "PROJECT_PSEUDO_ID", varying = list(vragen) , v.names = "cijfer", times = names(vragen), timevar = "vl")
-vragenLong$vl <- as.numeric(factor(vragenLong$vl, levels = vls, ordered = T))
-str(vragenLong)
-head(vragenLong, n =1)
-
-vragenLong[vragenLong$PROJECT_PSEUDO_ID=="00067887-50eb-4d61-9f5b-820de4c18c26",]
-
-(res <- lme(fixed=cijfer~gender_recent+age_recent+chronic_recent+household_recent+have_childs_at_home_recent + (Neuroticism*vl), random=~1+vl|PROJECT_PSEUDO_ID, data= vragenLong,na.action=na.omit))
 
 
-(res <- lme(fixed=cijfer~(Neuroticism*vl), random=~1+vl|PROJECT_PSEUDO_ID, data= vragenLong,na.action=na.omit))
+pheno3$naCOl <- NA
+
+str(as.list(t(qOverview)))
 
 
-summary(res)
+qNameMap <- data.frame(orginal = row.names(qOverview), new = make.names(row.names(qOverview), unique = T), stringsAsFactors = F)
+row.names(qNameMap) <- row.names(qOverview)
 
 
-anova(res)
+qList <- lapply(qNameMap[,1], function(q){
+  qs <- qOverview[q,-c(20,21)]
+  qs[qs==""]="naCOl"
+  qs[!qs %in% colnames(pheno3)] <- "naCOl"
+  return(qs)
+})
+names(qList) <- qNameMap[,2]
+qList[[qNameMap["responsdatum covid-vragenlijst",2]]]
+qList[[qNameMap["als u moet kiezen, denkt u zelf dat u een coronavirus/covid-19 infectie hebt (gehad)?",2]]]
 
+qList[c(qNameMap["als u moet kiezen, denkt u zelf dat u een coronavirus/covid-19 infectie hebt (gehad)?",2],qNameMap["responsdatum covid-vragenlijst",2])]
 
-
-
-date <- qOverview["responsdatum covid-vragenlijst",vls]
-
-vragen <- qOverview["hoe waardeert u uw kwaliteit van leven over de afgelopen 7 dagen?",vls]
+#vragen <- qOverview["hoe waardeert u uw kwaliteit van leven over de afgelopen 7 dagen?",vls]
+#vragen <- qOverview["als u moet kiezen, denkt u zelf dat u een coronavirus/covid-19 infectie hebt (gehad)?",vls]
+#date <- qOverview["responsdatum covid-vragenlijst",vls]
 date <- date[vragen!=""]
 vragen <- vragen[vragen!=""]
-
 
 
 #moet ik nu ook centeren?
@@ -57,12 +58,27 @@ vragen <- vragen[vragen!=""]
 
 startdate <- as.Date("30/03/2020","%d/%m/%Y")
 
+sum(!vragen %in% colnames(pheno3))
+
+
+
 
 vragenLong <- reshape(pheno3[, c("PROJECT_PSEUDO_ID", vragen, date, confounders, "Neuroticism")], direction = "long", idvar = "PROJECT_PSEUDO_ID", varying = list(date, vragen), v.names = c("date", "cijfer"), times = names(vragen), timevar = "vl")
+
+
+test <- qList[c(qNameMap["als u moet kiezen, denkt u zelf dat u een coronavirus/covid-19 infectie hebt (gehad)?",2],qNameMap["responsdatum covid-vragenlijst",2])]
+names(test)
+vragenLong <- reshape(pheno3[, c("PROJECT_PSEUDO_ID", qList[[qNameMap["responsdatum covid-vragenlijst",2]]], qList[[qNameMap["als u moet kiezen, denkt u zelf dat u een coronavirus/covid-19 infectie hebt (gehad)?",2]]], confounders, "Neuroticism")], direction = "long", idvar = "PROJECT_PSEUDO_ID", varying = test, v.names = names(test), times = vls, timevar = "vl")
+
+
+
+vragenLong <- reshape(pheno3, direction = "long", idvar = "PROJECT_PSEUDO_ID", varying = qList, v.names = names(qList), times = vls, timevar = "vl")
 vragenLong$vl2 <- as.numeric(factor(vragenLong$vl, levels = vls, ordered = T))
-vragenLong$days <- as.numeric(difftime(vragenLong$date, startdate ,units="days"))
+vragenLong$vl3 <- factor(vragenLong$vl, levels = vls, ordered = F)
+vragenLong$days <- as.numeric(difftime(vragenLong[,qNameMap["responsdatum covid-vragenlijst",2]], startdate ,units="days"))
 vragenLong$days2 <- vragenLong$days*vragenLong$days
 
+str(vragenLong$vl3)
 
 str(vragenLong)
 head(vragenLong, n =1)
@@ -75,7 +91,17 @@ dev.off()
 str(vragenLong)
 
 
-res <- lme(fixed=cijfer~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent + Neuroticism)*days), random=~1+vl|PROJECT_PSEUDO_ID, data= vragenLong,na.action=na.omit)
+modelLm <- lm()
+
+
+res <- lme(fixed=cijfer~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent + COVID.19.susceptibility)*days), random=~1+vl|PROJECT_PSEUDO_ID, data= vragenLong,na.action=na.omit)
+(x <- summary(res))
+x$tTable
+
+
+
+
+res <- lme(fixed=cijfer~((COVID.19.susceptibility)*days), random=~1|PROJECT_PSEUDO_ID, data= vragenLong,na.action=na.omit)
 (x <- summary(res))
 x$tTable
 
