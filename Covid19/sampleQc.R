@@ -10,10 +10,12 @@ row.names(pheno2) <- pheno2[,1]
 
 saveRDS(pheno2, "/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/questioniare_subset_participants_with_genome_data/questionaire_df_subset_participants_with_genome_data_01-03-2021.rds")
 
+c("gender_recent", "age_recent", "age2_recent", "chronic_recent", "household_recent", "have_childs_at_home_recent") %in% colnames(pheno2)
+
 
 sum(pheno2==8888, na.rm =T)
 
-
+dim(pheno2)
 
 qOverview <- read.delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/pgs_correlations/questionair_time_overview_nl.txt", stringsAsFactors = F, row.names = 1)
 vls <- colnames(qOverview)[-c(21,22)]
@@ -48,7 +50,9 @@ missingVraagList <- sapply(vls, function(vl){
   
 })
 
-str(vls)
+missingVraagList[["X14.0"]]
+
+range(sapply(missingVraagList, length))
 
 pdf("/groups/umcg-lifelines/tmp01/projects/ov20_0554/missingPerVl.pdf")
 sapply(vls, function(vl){
@@ -81,6 +85,13 @@ ppvl <- apply(missing, 2, function(x){
 barplot(ppvl)
 dev.off()
 
+qpp <- apply(missing, 1, function(x){
+  sum(x <= 5)
+})
+table(qpp)
+
+
+
 colnames(missing)[1:12]
 
 participatedFirstHalf <- apply(missing[,c(1:12)], 1, function(x){
@@ -100,12 +111,17 @@ sum(participatedBothHalf)
 
 
 
-  qpp <- apply(missing[participatedBothHalf,], 1, function(x){
+qpp <- apply(missing[participatedBothHalf,], 1, function(x){
   sum(x <= 5)
 })
 table(qpp)
 
 
+median(qpp)
+
+inclusionPerVl <- missing[participatedBothHalf,] <= 5
+str(inclusionPerVl)
+write.table(inclusionPerVl, file = "/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/inclusionPerVl.txt", quote = F, sep = "\t", col.names = NA)
 
 x <- apply(missing[names(qpp)[qpp==0],], 1, function(x){sum(x < 100)})
 table(x)
@@ -132,3 +148,49 @@ validationSet <- apply(missing[,c("X4.0","X9.0", "X14.0", "X17.0")], 1, function
   all(x <= 5)
 })
 table(validationSet)
+
+write.table(names(validationSet)[validationSet], file = "/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/validationSamples.txt", quote = F, row.names = F, col.names = F);
+
+vl = "X1.0"
+
+pdf("/groups/umcg-lifelines/tmp01/projects/ov20_0554/pcPerWeek.pdf")
+
+sapply(vls, function(vl){
+
+
+  
+vlq <- qOverview[,vl]
+vlq <- vlq[vlq!=""]
+vlq <- vlq[vlq%in%qForSampleQc]
+
+
+vlClean <- pheno2[missing[,vl] <= 5, vlq]
+
+types <- sapply(vlClean, class)
+vlClean <- as.matrix(vlClean[,types == "numeric" | types == "logical"])
+
+
+vlCleanColMean <- apply(vlClean, 2, mean, na.rm = T)
+for(c in 1:ncol(vlClean)){
+  vlClean[is.na(vlClean[,c ]),c] <- vlCleanColMean[c]
+}
+
+vlClean <- vlClean[,apply(vlClean, 2, sd)>0]
+dim(vlClean)
+vlClean <- scale(vlClean)
+
+pcaRes <- prcomp(t(vlClean), center = T, scale. = T)
+
+#plot(pcaRes)
+#dev.off()
+
+png(paste0("/groups/umcg-lifelines/tmp01/projects/ov20_0554/pcPerWeek/", vl, ".png"))
+plot(pcaRes$rotation[,c(1,2)], bg = adjustcolor("dodgerblue2", alpha.f = 0.1), pch = 21, col=adjustcolor("dodgerblue2", alpha.f = 0.1))
+(sd1 <- sd(pcaRes$rotation[,1]))
+abline(v=sd1*4, col = "firebrick")
+abline(v=-sd1*4, col = "firebrick")
+(sd2 <- sd(pcaRes$rotation[,2]))
+abline(h=sd2*4, col = "firebrick")
+abline(h=-sd2*4, col = "firebrick")
+grDevices::dev.off()
+})
