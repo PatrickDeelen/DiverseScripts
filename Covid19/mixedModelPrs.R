@@ -3,6 +3,8 @@
 remoter::client("localhost", port = 55556, password = "laberkak")
 
 library("nlme")
+library("ordinal")
+library("GLMMadaptive")
 
 qOverview <- as.matrix(read.delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/pgs_correlations/questionair_time_overview_nl.txt", stringsAsFactors = F, row.names = 1))
 vls <- colnames(qOverview)[-c(20,21)]
@@ -78,6 +80,13 @@ vragenLong$vl3 <- factor(vragenLong$vl, levels = vls, ordered = F)
 vragenLong$days <- as.numeric(difftime(vragenLong[,qNameMap["responsdatum covid-vragenlijst",2]], startdate ,units="days"))
 vragenLong$days2 <- vragenLong$days*vragenLong$days
 
+
+vragenLong$gender_recent <- factor(vragenLong$gender_recent, levels = 0:1, labels = c("female","male"))
+vragenLong$household_recent <- factor(vragenLong$household_recent, levels = 0:1, labels = c("single-person household","multi-person household"))
+vragenLong$have_childs_at_home_recent <- factor(vragenLong$have_childs_at_home_recent, levels = 0:1, labels = c("No childeren at home","Childeren at home"))
+vragenLong$chronic_recent <- factor(vragenLong$chronic_recent, levels = 0:1, labels = c("Healthy","Chronic disease"))
+
+
 str(vragenLong$vl3)
 
 str(vragenLong)
@@ -93,13 +102,29 @@ str(vragenLong)
 
 modelLm <- lm()
 
+vragenLong[,"gender_recent"]
 
-res <- lme(fixed=cijfer~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent + COVID.19.susceptibility)*days), random=~1+vl|PROJECT_PSEUDO_ID, data= vragenLong,na.action=na.omit)
+question = qNameMap["op hoeveel momenten van de dag eet u iets?",2]
+gwas = "Neuroticism"
+fixedModel <- as.formula(paste(question, "~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", paste(colnames(prs)[-1], collapse = " + ") ,")*days)"))
+randomModel <- as.formula("~1|PROJECT_PSEUDO_ID")
+
+res <-  lme(fixed = fixedModel, random=randomModel, data= vragenLong[,c("PROJECT_PSEUDO_ID", question,colnames(prs)[-1],"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days" )],na.action=na.omit)
 (x <- summary(res))
 x$tTable
 
+str(vragenLong[,question])
 
 
+fixedModel <- as.formula(paste(question, "~(", gwas ,"*days)"))
+randomModel <- as.formula("~1|PROJECT_PSEUDO_ID")
+oridnalFit <-  mixed_model(fixed = fixedModel, random=randomModel, data= vragenLong[,c("PROJECT_PSEUDO_ID", question,gwas,"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days" )],na.action=na.omit, family = poisson(), iter_EM = 0)
+summary(oridnalFit)
+
+
+#vragenLong[,qNameMap["hoe waardeert u uw kwaliteit van leven over de afgelopen 7 dagen?",2]] <- factor(vragenLong[,qNameMap["hoe waardeert u uw kwaliteit van leven over de afgelopen 7 dagen?",2]], levels = 1:10,  ordered = T)
+model <- as.formula(paste(question, "~((gender+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", gwas ,")*days) + (1|PROJECT_PSEUDO_ID)"))
+ordinalFit <- clmm(model, data = vragenLong,na.action=na.omit)
 
 res <- lme(fixed=cijfer~((COVID.19.susceptibility)*days), random=~1|PROJECT_PSEUDO_ID, data= vragenLong,na.action=na.omit)
 (x <- summary(res))
@@ -165,3 +190,25 @@ summary(res2)
 anova(res, res2)
 
 res <- lme(fixed=cijfer~ Neuroticism*days, random=~1+gender_recent+age_recent+age2_recent+chronic_recent+household_recent+have_childs_at_home_recent|PROJECT_PSEUDO_ID, data= vragenLong,na.action=na.omit)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+question = qNameMap["hoe waardeert u uw kwaliteit van leven over de afgelopen 7 dagen?",2]
+fixedModel <- as.formula(paste(question, "~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", paste(colnames(prs)[-1], collapse = " + ") ,"))"))
+lmFit <- lm(fixedModel, data = vragenLong[vragenLong$vl == "X2.0",])
+summary(lmFit)
