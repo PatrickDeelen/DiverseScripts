@@ -108,9 +108,9 @@ zScoreList <- lapply(qLoop[1:10], function(q){
     randomModel <- as.formula("~1|PROJECT_PSEUDO_ID")
     res <-  lme(fixed = fixedModel, random=randomModel, data= vragenLong[,c("PROJECT_PSEUDO_ID", q,colnames(prs)[-1],"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days" )],na.action=na.omit)
     tTable <- summary(res)$tTable
-    zScores <- qnorm(1 - (tTable[,"p-value"]/2)) 
-    zScores[is.infinite(zScores)] <- 30
-    zScores[tTable[,"Value"] < 0] <- zScores[tTable[,"Value"] < 0] * -1
+    zScores <- qnorm((tTable[,"p-value"]/2)) 
+    zScores[is.infinite(zScores)] <- -30
+    zScores[tTable[,"Value"] > 0] <- zScores[tTable[,"Value"] > 0] * -1
     return(zScores)
   }, error = function(e){print(q); return(NULL)})
   return(zScores)
@@ -118,12 +118,12 @@ zScoreList <- lapply(qLoop[1:10], function(q){
 
 str(zScoreList)
 
-zScoreList[[1]]
+x <- zScoreList[[1]]
+x[order(abs(x))]
 
+q <- qLoop[[1]]
 
-
-
-
+zScores[order(abs(zScores))]
 
 ###### Below is old testing stuff
 
