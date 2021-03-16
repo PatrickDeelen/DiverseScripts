@@ -3,38 +3,69 @@
 remoter::client("localhost", port = 55556, password = "laberkak")
 
 library("nlme")
-library("ordinal")
-library("GLMMadaptive")
+#library("ordinal")
+#library("GLMMadaptive")
 
+#Constants
+startdate <- as.Date("30/03/2020","%d/%m/%Y")
+confounders <- c("gender_recent", "age_recent", "age2_recent", "chronic_recent", "household_recent", "have_childs_at_home_recent")
+
+
+##load pheno and prs
+pheno2 <- readRDS("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/questioniare_subset_participants_with_genome_data/questionaire_df_subset_participants_with_genome_data_01-03-2021.rds")
+prs <- read.delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/input_PGS_data_ugli/PGS_combined_ugli_26-02-2021.txt", stringsAsFactors = F)
+pheno3 <- merge(pheno2, prs, by = "PROJECT_PSEUDO_ID")
+
+totalPart <- nrow(pheno3)
+
+#na col to use in reshapre for missing questions 
+pheno3$naCOl <- NA
+
+
+
+##Load and format questions meta data
 qOverview <- as.matrix(read.delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/pgs_correlations/questionair_time_overview_nl.txt", stringsAsFactors = F, row.names = 1))
 vls <- colnames(qOverview)[-c(20,21)]
 
-pheno2 <- readRDS("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/questioniare_subset_participants_with_genome_data/questionaire_df_subset_participants_with_genome_data_01-03-2021.rds")
+# mask questions with >50% missing
+qOverview[,-c(20,21)] <- apply(qOverview[,-c(20,21)], 1:2, function(x){
+  if(x==""){
+    return ("")
+  } else if(!x %in% colnames(pheno3)) {
+    return("")
+  } else {
+    if(sum(is.na(pheno3[,x])) >= (totalPart/4)){
+      return (x)
+    } else {
+      return ("")
+    }
+  }
+})
 
-confounders <- c("gender_recent", "age_recent", "age2_recent", "chronic_recent", "household_recent", "have_childs_at_home_recent")
-
-prs <- read.delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/input_PGS_data_ugli/PGS_combined_ugli_26-02-2021.txt", stringsAsFactors = F)
-
-str(prs)
-
-vragen <- qOverview["hoe waardeert u uw kwaliteit van leven over de afgelopen 7 dagen?",vls]
-vragen <- vragen[vragen!=""]
-
-pheno3 <- merge(pheno2, prs, by = "PROJECT_PSEUDO_ID")
+qOverview["responsdatum covid-vragenlijst",]
+sum(qOverview == "")
 
 
+# select questions with 4 repeats spread out over first and last half
+qPassQc <- sapply(rownames(qOverview), function(q){
+  
+  qsFirstHalf <- qOverview[q,c(1:12)]
+  qsSecondHalf <- qOverview[q,c(13:19)]
+    return(sum(qsFirstHalf!="") >= 2 && sum(qsSecondHalf!="") >= 2)
+  
+})
+table(qPassQc)
 
-pheno3$naCOl <- NA
+qOverview2 <- qOverview[qPassQc,-c(20,21)]
+dim(qOverview2)
 
-str(as.list(t(qOverview)))
 
-
-qNameMap <- data.frame(orginal = row.names(qOverview), new = make.names(row.names(qOverview), unique = T), stringsAsFactors = F)
-row.names(qNameMap) <- row.names(qOverview)
+qNameMap <- data.frame(orginal = row.names(qOverview2), new = make.names(row.names(qOverview2), unique = T), stringsAsFactors = F)
+row.names(qNameMap) <- row.names(qOverview2)
 
 
 qList <- lapply(qNameMap[,1], function(q){
-  qs <- qOverview[q,-c(20,21)]
+  qs <- qOverview2[q,-c(20,21)]
   qs[qs==""]="naCOl"
   qs[!qs %in% colnames(pheno3)] <- "naCOl"
   return(qs)
@@ -43,37 +74,8 @@ names(qList) <- qNameMap[,2]
 qList[[qNameMap["responsdatum covid-vragenlijst",2]]]
 qList[[qNameMap["als u moet kiezen, denkt u zelf dat u een coronavirus/covid-19 infectie hebt (gehad)?",2]]]
 
-qList[c(qNameMap["als u moet kiezen, denkt u zelf dat u een coronavirus/covid-19 infectie hebt (gehad)?",2],qNameMap["responsdatum covid-vragenlijst",2])]
 
-#vragen <- qOverview["hoe waardeert u uw kwaliteit van leven over de afgelopen 7 dagen?",vls]
-#vragen <- qOverview["als u moet kiezen, denkt u zelf dat u een coronavirus/covid-19 infectie hebt (gehad)?",vls]
-#date <- qOverview["responsdatum covid-vragenlijst",vls]
-date <- date[vragen!=""]
-vragen <- vragen[vragen!=""]
-
-
-#moet ik nu ook centeren?
-#in de intereactie neuro tijd nu indicatie dat effect van prs veranderd met de tijd
-
-#tot 10 aug (vl11)
-#omcatten naar dagen vanaf #30 maart
-
-startdate <- as.Date("30/03/2020","%d/%m/%Y")
-
-sum(!vragen %in% colnames(pheno3))
-
-
-
-
-vragenLong <- reshape(pheno3[, c("PROJECT_PSEUDO_ID", vragen, date, confounders, "Neuroticism")], direction = "long", idvar = "PROJECT_PSEUDO_ID", varying = list(date, vragen), v.names = c("date", "cijfer"), times = names(vragen), timevar = "vl")
-
-
-test <- qList[c(qNameMap["als u moet kiezen, denkt u zelf dat u een coronavirus/covid-19 infectie hebt (gehad)?",2],qNameMap["responsdatum covid-vragenlijst",2])]
-names(test)
-vragenLong <- reshape(pheno3[, c("PROJECT_PSEUDO_ID", qList[[qNameMap["responsdatum covid-vragenlijst",2]]], qList[[qNameMap["als u moet kiezen, denkt u zelf dat u een coronavirus/covid-19 infectie hebt (gehad)?",2]]], confounders, "Neuroticism")], direction = "long", idvar = "PROJECT_PSEUDO_ID", varying = test, v.names = names(test), times = vls, timevar = "vl")
-
-
-
+## Reshape to long format and clean some variables
 vragenLong <- reshape(pheno3, direction = "long", idvar = "PROJECT_PSEUDO_ID", varying = qList, v.names = names(qList), times = vls, timevar = "vl")
 vragenLong$vl2 <- as.numeric(factor(vragenLong$vl, levels = vls, ordered = T))
 vragenLong$vl3 <- factor(vragenLong$vl, levels = vls, ordered = F)
@@ -86,12 +88,6 @@ vragenLong$household_recent <- factor(vragenLong$household_recent, levels = 0:1,
 vragenLong$have_childs_at_home_recent <- factor(vragenLong$have_childs_at_home_recent, levels = 0:1, labels = c("No childeren at home","Childeren at home"))
 vragenLong$chronic_recent <- factor(vragenLong$chronic_recent, levels = 0:1, labels = c("Healthy","Chronic disease"))
 
-
-str(vragenLong$vl3)
-
-str(vragenLong)
-head(vragenLong, n =1)
-
 vragenLong[vragenLong$PROJECT_PSEUDO_ID=="00067887-50eb-4d61-9f5b-820de4c18c26",]
 
 hist(vragenLong$days, breaks = 330)
@@ -100,9 +96,38 @@ dev.off()
 str(vragenLong)
 
 
-modelLm <- lm()
+## Run models
 
-vragenLong[,"gender_recent"]
+qLoop <- as.list(qNameMap[,2])
+names(qLoop) <- qNameMap[,1]
+
+
+zScoreList <- lapply(qLoop[1:10], function(q){
+  zScores = tryCatch({
+    fixedModel <- as.formula(paste(q, "~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", paste(colnames(prs)[-1], collapse = " + ") ,")*days)"))
+    randomModel <- as.formula("~1|PROJECT_PSEUDO_ID")
+    res <-  lme(fixed = fixedModel, random=randomModel, data= vragenLong[,c("PROJECT_PSEUDO_ID", q,colnames(prs)[-1],"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days" )],na.action=na.omit)
+    tTable <- summary(res)$tTable
+    zScores <- qnorm(1 - (tTable[,"p-value"]/2)) 
+    zScores[is.infinite(zScores)] <- 30
+    zScores[tTable[,"Value"] < 0] <- zScores[tTable[,"Value"] < 0] * -1
+    return(zScores)
+  }, error = function(e){print(q); return(NULL)})
+  return(zScores)
+})
+
+str(zScoreList)
+
+zScoreList[[1]]
+
+
+
+
+
+
+###### Below is old testing stuff
+
+q<-qNameMap["op hoeveel momenten van de dag eet u iets?",2]
 
 question = qNameMap["op hoeveel momenten van de dag eet u iets?",2]
 gwas = "Neuroticism"
