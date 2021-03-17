@@ -3,6 +3,7 @@
 remoter::client("localhost", port = 55556, password = "laberkak")
 
 library("nlme")
+library(heatmap3)
 #library("ordinal")
 #library("GLMMadaptive")
 
@@ -102,7 +103,7 @@ qLoop <- as.list(qNameMap[,2])
 names(qLoop) <- qNameMap[,1]
 
 
-zScoreList <- lapply(qLoop[1:10], function(q){
+zScoreList <- lapply(qLoop, function(q){
   zScores = tryCatch({
     fixedModel <- as.formula(paste(q, "~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", paste(colnames(prs)[-1], collapse = " + ") ,")*days)"))
     randomModel <- as.formula("~1|PROJECT_PSEUDO_ID")
@@ -117,6 +118,18 @@ zScoreList <- lapply(qLoop[1:10], function(q){
 })
 
 str(zScoreList)
+zScoreList2 <- zScoreList[!sapply(zScoreList, is.null)]
+
+zscores <- do.call("rbind", zScoreList2)
+
+"(Intercept)" %in% colnames(zscores)
+
+zscores <- zscores[,colnames(zscores) != "(Intercept)"]
+
+
+pdf("mixedModelZscores.pdf", width = 50, height = 50)
+heatmap3(zscores, balanceColor = T, scale = "none", margins = c(20,20))
+dev.off()
 
 x <- zScoreList[[1]]
 x[order(abs(x))]
