@@ -120,12 +120,18 @@ zScoreList <- lapply(qLoop, function(q){
 str(zScoreList)
 zScoreList2 <- zScoreList[!sapply(zScoreList, is.null)]
 
+# combine into z-score matrix excluding intercept
 zscores <- do.call("rbind", zScoreList2)
-
-"(Intercept)" %in% colnames(zscores)
-
 zscores <- zscores[,colnames(zscores) != "(Intercept)"]
 
+
+
+
+#below is testingground
+
+
+
+dim(zscores)
 
 pdf("mixedModelZscores.pdf", width = 50, height = 50)
 heatmap3(zscores, balanceColor = T, scale = "none", margins = c(20,20))
