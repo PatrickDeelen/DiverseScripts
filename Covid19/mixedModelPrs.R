@@ -2,10 +2,26 @@
 
 remoter::client("localhost", port = 55556, password = "laberkak")
 
+setwd("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/pgs_correlations/")
+
 library("nlme")
 library(heatmap3)
 #library("ordinal")
-#library("GLMMadaptive")
+library("GLMMadaptive")
+library(readr)
+
+
+if(FALSE){
+  #Run once to conver pheno data to RDS format
+  pheno <- read_delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/questtionnaire_data_subset_genome_filter_correct_filled_questionnaires/covid_export_questionnaire_1-17_questionnaire_filter_genome_correct_filled_18-03-2021.txt", delim = "\t", quote = "", guess_max = 100000)
+  dim(pheno)
+  pheno2 <- as.data.frame(pheno)
+  row.names(pheno2) <- pheno2[,1]
+  
+  saveRDS(pheno2, "/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/questtionnaire_data_subset_genome_filter_correct_filled_questionnaires/covid_export_questionnaire_1-17_questionnaire_filter_genome_correct_filled_18-03-2021.rds")
+  
+}
+
 
 #Constants
 startdate <- as.Date("30/03/2020","%d/%m/%Y")
@@ -13,9 +29,34 @@ confounders <- c("gender_recent", "age_recent", "age2_recent", "chronic_recent",
 
 
 ##load pheno and prs
-pheno2 <- readRDS("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/questioniare_subset_participants_with_genome_data/questionaire_df_subset_participants_with_genome_data_01-03-2021.rds")
-prs <- read.delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/input_PGS_data_ugli/PGS_combined_ugli_26-02-2021.txt", stringsAsFactors = F)
+pheno2 <- readRDS("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/questtionnaire_data_subset_genome_filter_correct_filled_questionnaires/covid_export_questionnaire_1-17_questionnaire_filter_genome_correct_filled_18-03-2021.rds")
+
+if(!all(confounders %in% colnames(pheno2))){
+  stop("Not all confounders found")
+}
+
+prsGsa <- read.delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/input_PGS_data_ugli/PGS_combined_ugli_26-02-2021.txt", stringsAsFactors = F)
+prsCyto <- read.delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/input_PGS_data_cyto_v2_duplicate_removed/PGS_combined_cyto_duplicate_from_ugli_removed_18-03-2021.txt", stringsAsFactors = F)
+
+if(!all(colnames(prsGsa) == colnames(prsCyto))){
+  stop("Colnames must be equal")
+}
+if(!all(!row.names(prsGsa$PROJECT_PSEUDO_ID) %in% row.names(prsCyto$PROJECT_PSEUDO_ID))){
+  stop("Overlapping samples")
+}
+
+prs <- rbind(prsGsa, prsCyto)
+
+colnames(prs)[colnames(prs) == "BMI"] <- "BMI_gwas"
+
+if(!all(pheno2$PROJECT_PSEUDO_ID %in% prs$PROJECT_PSEUDO_ID)){
+  stop("Not all pheno have genetics")#easly solved but code makes this assumtion
+}
+
+pheno2$array <- factor(as.numeric(pheno2$PROJECT_PSEUDO_ID %in% prsGsa$PROJECT_PSEUDO_ID), levels = 0:1, labels = c("Cyto", "Gsa"))
+
 pheno3 <- merge(pheno2, prs, by = "PROJECT_PSEUDO_ID")
+
 
 totalPart <- nrow(pheno3)
 
@@ -23,12 +64,11 @@ totalPart <- nrow(pheno3)
 pheno3$naCOl <- NA
 
 
-
 ##Load and format questions meta data
-qOverview <- as.matrix(read.delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/pgs_correlations/questionair_time_overview_nl.txt", stringsAsFactors = F, row.names = 1))
+qOverview <- as.matrix(read.delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/pgs_correlations/quest_overview_nl_new_quest17_codes.txt", stringsAsFactors = F, row.names = 1))
 vls <- colnames(qOverview)[-c(20,21)]
 
-# mask questions with >50% missing
+# mask questions with >75% missing
 qOverview[,-c(20,21)] <- apply(qOverview[,-c(20,21)], 1:2, function(x){
   if(x==""){
     return ("")
@@ -52,7 +92,7 @@ qPassQc <- sapply(rownames(qOverview), function(q){
   
   qsFirstHalf <- qOverview[q,c(1:12)]
   qsSecondHalf <- qOverview[q,c(13:19)]
-    return(sum(qsFirstHalf!="") >= 2 && sum(qsSecondHalf!="") >= 2)
+  return(sum(qsFirstHalf!="") >= 2 && sum(qsSecondHalf!="") >= 2)
   
 })
 table(qPassQc)
@@ -66,7 +106,7 @@ row.names(qNameMap) <- row.names(qOverview2)
 
 
 qList <- lapply(qNameMap[,1], function(q){
-  qs <- qOverview2[q,-c(20,21)]
+  qs <- qOverview2[q,]
   qs[qs==""]="naCOl"
   qs[!qs %in% colnames(pheno3)] <- "naCOl"
   return(qs)
@@ -77,6 +117,11 @@ qList[[qNameMap["als u moet kiezen, denkt u zelf dat u een coronavirus/covid-19 
 
 
 ## Reshape to long format and clean some variables
+
+if(any(names(qList) %in% colnames(pheno3))){
+  stop("Column name clash after reshape")
+}
+
 vragenLong <- reshape(pheno3, direction = "long", idvar = "PROJECT_PSEUDO_ID", varying = qList, v.names = names(qList), times = vls, timevar = "vl")
 vragenLong$vl2 <- as.numeric(factor(vragenLong$vl, levels = vls, ordered = T))
 vragenLong$vl3 <- factor(vragenLong$vl, levels = vls, ordered = F)
@@ -89,7 +134,6 @@ vragenLong$household_recent <- factor(vragenLong$household_recent, levels = 0:1,
 vragenLong$have_childs_at_home_recent <- factor(vragenLong$have_childs_at_home_recent, levels = 0:1, labels = c("No childeren at home","Childeren at home"))
 vragenLong$chronic_recent <- factor(vragenLong$chronic_recent, levels = 0:1, labels = c("Healthy","Chronic disease"))
 
-vragenLong[vragenLong$PROJECT_PSEUDO_ID=="00067887-50eb-4d61-9f5b-820de4c18c26",]
 
 hist(vragenLong$days, breaks = 330)
 dev.off()
@@ -102,12 +146,13 @@ str(vragenLong)
 qLoop <- as.list(qNameMap[,2])
 names(qLoop) <- qNameMap[,1]
 
-
+q=qLoop[[1]]
+q<-qNameMap["hoe waardeert u uw kwaliteit van leven over de afgelopen 7 dagen?",2]
 zScoreList <- lapply(qLoop, function(q){
   zScores = tryCatch({
-    fixedModel <- as.formula(paste(q, "~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", paste(colnames(prs)[-1], collapse = " + ") ,")*days)"))
+    fixedModel <- as.formula(paste(q, "~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", paste(colnames(prs)[-1], collapse = " + ") ,")*days*array + days2) "))
     randomModel <- as.formula("~1|PROJECT_PSEUDO_ID")
-    res <-  lme(fixed = fixedModel, random=randomModel, data= vragenLong[,c("PROJECT_PSEUDO_ID", q,colnames(prs)[-1],"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days" )],na.action=na.omit)
+    res <-  lme(fixed = fixedModel, random=randomModel, data= vragenLong[,c("PROJECT_PSEUDO_ID", q,colnames(prs)[-1],"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days", "days2", "array" )],na.action=na.omit)
     tTable <- summary(res)$tTable
     zScores <- qnorm((tTable[,"p-value"]/2)) 
     zScores[is.infinite(zScores)] <- -30
@@ -124,12 +169,18 @@ zScoreList2 <- zScoreList[!sapply(zScoreList, is.null)]
 zscores <- do.call("rbind", zScoreList2)
 zscores <- zscores[,colnames(zscores) != "(Intercept)"]
 
-
+write.table(zscores, file = "zscoreMatrix.txt", sep = "\t", quote = F, col.names = NA)
 
 
 #below is testingground
 
+sum(is.na(vragenLong[!is.na(vragenLong[,q]),c(colnames(prs)[-1])]))
 
+
+
+cor.test(fitted(res), vragenLong[!is.na(vragenLong[,q]),q])
+
+  write.table(summary(res)$tTable, file = "tmp3.txt", sep = "\t", quote = F, col.names = NA)
 
 dim(zscores)
 
@@ -146,7 +197,7 @@ zScores[order(abs(zScores))]
 
 ###### Below is old testing stuff
 
-q<-qNameMap["op hoeveel momenten van de dag eet u iets?",2]
+q<-qNameMap["hoe waardeert u uw kwaliteit van leven over de afgelopen 7 dagen?",2]
 
 question = qNameMap["op hoeveel momenten van de dag eet u iets?",2]
 gwas = "Neuroticism"
@@ -158,6 +209,29 @@ res <-  lme(fixed = fixedModel, random=randomModel, data= vragenLong[,c("PROJECT
 x$tTable
 
 str(vragenLong[,question])
+
+
+
+
+
+fixedModel <- as.formula(paste(q, "~(gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent)+days+days2 "))
+randomModel <- as.formula("~1|PROJECT_PSEUDO_ID")
+res <-  lme(fixed = fixedModel, random=randomModel, data= vragenLong[,c("PROJECT_PSEUDO_ID", q,colnames(prs)[-1],"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days", "days2" )],na.action=na.omit)
+str(res$residuals)
+
+summary(res)
+
+x <- vragenLong[rownames(res$residuals),c("PROJECT_PSEUDO_ID", q,colnames(prs)[-1],"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days", "days2" )]
+str(x)
+
+x$residuals <- res$residuals
+
+
+res2 <-  lme(fixed = fixedModel, random=randomModel, data= vragenLong[,c("PROJECT_PSEUDO_ID", q,colnames(prs)[-1],"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days", "days2" )],na.action=na.omit)
+tTable <- summary(res2)$tTable
+
+
+
 
 
 fixedModel <- as.formula(paste(question, "~(", gwas ,"*days)"))
