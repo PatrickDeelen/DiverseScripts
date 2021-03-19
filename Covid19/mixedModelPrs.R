@@ -6,9 +6,10 @@ setwd("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/pgs_correlations
 
 library("nlme")
 library(heatmap3)
-#library("ordinal")
+library("ordinal")
 library("GLMMadaptive")
 library(readr)
+library(lme4)
 
 
 if(FALSE){
@@ -127,6 +128,9 @@ vragenLong$vl2 <- as.numeric(factor(vragenLong$vl, levels = vls, ordered = T))
 vragenLong$vl3 <- factor(vragenLong$vl, levels = vls, ordered = F)
 vragenLong$days <- as.numeric(difftime(vragenLong[,qNameMap["responsdatum covid-vragenlijst",2]], startdate ,units="days"))
 vragenLong$days2 <- vragenLong$days*vragenLong$days
+#vragenLong$days3 <- vragenLong$days*vragenLong$days*vragenLong$days
+#vragenLong$days4 <- vragenLong$days*vragenLong$days*vragenLong$days*vragenLong$days
+#vragenLong$days5 <- vragenLong$days*vragenLong$days*vragenLong$days*vragenLong$days*vragenLong$days
 
 
 vragenLong$gender_recent <- factor(vragenLong$gender_recent, levels = 0:1, labels = c("female","male"))
@@ -146,13 +150,14 @@ str(vragenLong)
 qLoop <- as.list(qNameMap[,2])
 names(qLoop) <- qNameMap[,1]
 
-q=qLoop[[1]]
+q=qLoop[[2]]
 q<-qNameMap["hoe waardeert u uw kwaliteit van leven over de afgelopen 7 dagen?",2]
 zScoreList <- lapply(qLoop, function(q){
   zScores = tryCatch({
-    fixedModel <- as.formula(paste(q, "~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", paste(colnames(prs)[-1], collapse = " + ") ,")*days*array + days2) "))
+    array = "Gsa"
+    fixedModel <- as.formula(paste(q, "~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", paste(colnames(prs)[-1], collapse = " + ") ,")*days + days2 ) "))
     randomModel <- as.formula("~1|PROJECT_PSEUDO_ID")
-    res <-  lme(fixed = fixedModel, random=randomModel, data= vragenLong[,c("PROJECT_PSEUDO_ID", q,colnames(prs)[-1],"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days", "days2", "array" )],na.action=na.omit)
+    res <-  lme(fixed = fixedModel, random=randomModel, data= vragenLong[vragenLong$array == array,c("PROJECT_PSEUDO_ID", q,colnames(prs)[-1],"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days", "days2", "array" )],na.action=na.omit, control = lmeControl(opt = "optim"))
     tTable <- summary(res)$tTable
     zScores <- qnorm((tTable[,"p-value"]/2)) 
     zScores[is.infinite(zScores)] <- -30
@@ -174,13 +179,54 @@ write.table(zscores, file = "zscoreMatrix.txt", sep = "\t", quote = F, col.names
 
 #below is testingground
 
+str(anova(res4,res5))
+
+d <- vragenLong[vragenLong$array == array & !is.na(vragenLong[,q]),]
+
+
+
+
+prsRange <- quantile(d[,"Neuroticism"],probs = seq(0,1,0.1))
+dayRange <- range(d[,"days"])
+
+days = seq(dayRange[1], dayRange[2], 1)
+days2 = days * days
+
+str(res3)
+
+str(tTable)
+
+coef <- tTable[,"Value"]
+
+length(coef)
+
+plot(days, coef["(Intercept)"] + coef["days"] * days + coef["days2"] * days2 + prsRange[10] * days * coef["Neuroticism:days"] + coef["Neuroticism"] * prsRange[10], col = "red", type = "l", ylim = c(5,7.2), ylab = "Quality of life prediciton by model", xlab = "Dagen sinds 30 maart 2020", main = "Red is high neurotism PRS and blue is low PRS")
+points(days, coef["(Intercept)"] + coef["days"] * days + coef["days2"] * days2 + prsRange[1] * days * coef["Neuroticism:days"] + coef["Neuroticism"] * prsRange[1], col = "blue", type = "l")
+dev.off()
+
+plot(days, coef["(Intercept)"] + coef["days"] * days + coef["days2"] * days2 + prsRange[10] * days * coef["Neuroticism:days"] + coef["Neuroticism"] * prsRange[5], col = "red", type = "l", ylim = c(2,7), ylab = "Quality of life prediciton by model", xlab = "Dagen sinds 30 maart 2020", main = "Red is high neurotism PRS and blue is low PRS")
+points(days, coef["(Intercept)"] + coef["days"] * days + coef["days2"] * days2 + prsRange[1] * days * coef["Neuroticism:days"] + coef["Neuroticism"] * prsRange[5], col = "blue", type = "l")
+dev.off()
+
+plot(days, coef["days"] * days + coef["days2"] * days2 + 1 * days * coef["chronic_recentChronic disease:days"] + coef["chronic_recentChronic disease"] * 0, col = "red", type = "l", ylim = c(-4,0.25), ylab = "Quality of life prediciton by model", xlab = "Dagen sinds 30 maart 2020", main = "Red is high neurotism PRS and blue is low PRS")
+points(days,  coef["days"] * days + coef["days2"] * days2 + 0 * days * coef["chronic_recentChronic disease:days"] + coef["chronic_recentChronic disease"] * 0, col = "blue", type = "l")
+dev.off()
+
+
+plot(fitted.values(res), d[,q])
+dev.off()
+
+plot(d[,"days"], d[,q])
+abline(res)
+dev.off()
+
 sum(is.na(vragenLong[!is.na(vragenLong[,q]),c(colnames(prs)[-1])]))
 
 
 
 cor.test(fitted(res), vragenLong[!is.na(vragenLong[,q]),q])
 
-  write.table(summary(res)$tTable, file = "tmp3.txt", sep = "\t", quote = F, col.names = NA)
+write.table(summary(res)$tTable, file = "tmp3.txt", sep = "\t", quote = F, col.names = NA)
 
 dim(zscores)
 
@@ -191,7 +237,7 @@ dev.off()
 x <- zScoreList[[1]]
 x[order(abs(x))]
 
-q <- qLoop[[1]]
+q <- qLoop[[2]]
 
 zScores[order(abs(zScores))]
 
@@ -234,17 +280,31 @@ tTable <- summary(res2)$tTable
 
 
 
-fixedModel <- as.formula(paste(question, "~(", gwas ,"*days)"))
+fixedModel <- as.formula(paste(q, "~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", paste(colnames(prs)[-1], collapse = " + ") ,")*days + days2) "))
 randomModel <- as.formula("~1|PROJECT_PSEUDO_ID")
-oridnalFit <-  mixed_model(fixed = fixedModel, random=randomModel, data= vragenLong[,c("PROJECT_PSEUDO_ID", question,gwas,"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days" )],na.action=na.omit, family = poisson(), iter_EM = 0)
+d <- vragenLong[vragenLong$array == array & !is.na(vragenLong[,q]),c("PROJECT_PSEUDO_ID", q,colnames(prs)[-1],"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days", "days2", "array" )]
+#d[,q] <- d[,q]-1
+oridnalFit <-  mixed_model(fixed = fixedModel, random=randomModel, data=d ,na.action=na.omit, family = poisson())
+table(d[,q])
 summary(oridnalFit)
+
+model <- as.formula(paste(q, "~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", paste(colnames(prs)[-1], collapse = " + ") ,")*days + days2) + (1|PROJECT_PSEUDO_ID) "))
+d <- vragenLong[vragenLong$array == array & !is.na(vragenLong[,q]),c("PROJECT_PSEUDO_ID", q,colnames(prs)[-1],"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days", "days2", "array" )]
+d[,q] <- d[,q]-1
+table(d[,q] )
+glmMerFit <- glmer (model, data = d, family = binomial, control = glmerControl(optimizer = "bobyqa"))
+summary(glmMerFit)
+
 
 
 #vragenLong[,qNameMap["hoe waardeert u uw kwaliteit van leven over de afgelopen 7 dagen?",2]] <- factor(vragenLong[,qNameMap["hoe waardeert u uw kwaliteit van leven over de afgelopen 7 dagen?",2]], levels = 1:10,  ordered = T)
-model <- as.formula(paste(question, "~((gender+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", gwas ,")*days) + (1|PROJECT_PSEUDO_ID)"))
-ordinalFit <- clmm(model, data = vragenLong,na.action=na.omit)
+model <- as.formula(paste(q, "~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", paste(colnames(prs)[-1], collapse = " + ") ,")*days + days2) + (1|PROJECT_PSEUDO_ID) "))
+d <- vragenLong[vragenLong$array == array & !is.na(vragenLong[,q]),c("PROJECT_PSEUDO_ID", q,colnames(prs)[-1],"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days", "days2", "array" )]
+d[,q] <- as.factor(d[,q])
+table(d[,q] )
+ordinalFit <- clmm(model, data = d,na.action=na.omit, link = "logit")
 
-res <- lme(fixed=cijfer~((COVID.19.susceptibility)*days), random=~1|PROJECT_PSEUDO_ID, data= vragenLong,na.action=na.omit)
+wares <- lme(fixed=cijfer~((COVID.19.susceptibility)*days), random=~1|PROJECT_PSEUDO_ID, data= vragenLong,na.action=na.omit)
 (x <- summary(res))
 x$tTable
 
