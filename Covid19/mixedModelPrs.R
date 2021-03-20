@@ -32,6 +32,11 @@ confounders <- c("gender_recent", "age_recent", "age2_recent", "chronic_recent",
 ##load pheno and prs
 pheno2 <- readRDS("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/questtionnaire_data_subset_genome_filter_correct_filled_questionnaires/covid_export_questionnaire_1-17_questionnaire_filter_genome_correct_filled_18-03-2021.rds")
 
+sampleQc <- read.delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/inclusionPerVl.txt" , stringsAsFactors = F, row.names = 1)
+
+pheno2 <- pheno2[pheno2$PROJECT_PSEUDO_ID %in% row.names(sampleQc),]
+dim(pheno2)
+
 if(!all(confounders %in% colnames(pheno2))){
   stop("Not all confounders found")
 }
@@ -56,6 +61,9 @@ if(!all(pheno2$PROJECT_PSEUDO_ID %in% prs$PROJECT_PSEUDO_ID)){
 
 pheno2$array <- factor(as.numeric(pheno2$PROJECT_PSEUDO_ID %in% prsGsa$PROJECT_PSEUDO_ID), levels = 0:1, labels = c("Cyto", "Gsa"))
 
+arrayList <- as.list(levels(pheno2$array))
+names(arrayList) <- levels(pheno2$array)
+
 pheno3 <- merge(pheno2, prs, by = "PROJECT_PSEUDO_ID")
 
 
@@ -68,6 +76,9 @@ pheno3$naCOl <- NA
 ##Load and format questions meta data
 qOverview <- as.matrix(read.delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/pgs_correlations/quest_overview_nl_new_quest17_codes.txt", stringsAsFactors = F, row.names = 1))
 vls <- colnames(qOverview)[-c(20,21)]
+
+
+
 
 # mask questions with >75% missing
 qOverview[,-c(20,21)] <- apply(qOverview[,-c(20,21)], 1:2, function(x){
@@ -117,6 +128,30 @@ qList[[qNameMap["responsdatum covid-vragenlijst",2]]]
 qList[[qNameMap["als u moet kiezen, denkt u zelf dat u een coronavirus/covid-19 infectie hebt (gehad)?",2]]]
 
 
+
+##Create ever covid pos variables
+
+testedPos <- qList[[qNameMap["hebt u een coronavirus/covid-19 infectie (gehad)?",2]]]
+everPosQNames <- paste0("everC19Pos",1:ncol(qOverview2))
+qList[["everC19Pos"]] <- everPosQNames
+qNameMap <- rbind(qNameMap, c("everC19Pos","everC19Pos"))
+rownames(qNameMap)[nrow(qNameMap)] <- "everC19Pos"
+everPos <- matrix(data = 0, nrow = nrow(pheno3), ncol = ncol(qOverview2) , dimnames = list(row.names = pheno3$PROJECT_PSEUDO_ID, col.names = everPosQNames) )
+
+everPos[!is.na(pheno3[,testedPos[1]]) & pheno3[,testedPos[1]] == 1, 1] <- 1
+
+for(i in 2:ncol(qOverview2)){
+  everPos[(!is.na(pheno3[,testedPos[i]]) & pheno3[,testedPos[i]] == 1) | everPos[,i-1] == 1, i] <- 1
+}
+
+#apply(everPos, 2, sum)
+
+if(any(colnames(everPos) %in% colnames(pheno3))){
+  stop("Duplicate col names")
+}
+
+pheno3 <- merge(pheno3, everPos, by.x = "PROJECT_PSEUDO_ID", by.y = 0)
+
 ## Reshape to long format and clean some variables
 
 if(any(names(qList) %in% colnames(pheno3))){
@@ -150,23 +185,34 @@ str(vragenLong)
 qLoop <- as.list(qNameMap[,2])
 names(qLoop) <- qNameMap[,1]
 
+
 q=qLoop[[2]]
 q<-qNameMap["hoe waardeert u uw kwaliteit van leven over de afgelopen 7 dagen?",2]
+q<-qNameMap["Positive tested cumsum",2]
+q<-qNameMap["everC19Pos",2]
+q<-qNameMap["BMI",2]
 zScoreList <- lapply(qLoop, function(q){
   zScores = tryCatch({
-    array = "Gsa"
-    fixedModel <- as.formula(paste(q, "~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", paste(colnames(prs)[-1], collapse = " + ") ,")*days + days2 ) "))
-    randomModel <- as.formula("~1|PROJECT_PSEUDO_ID")
-    res <-  lme(fixed = fixedModel, random=randomModel, data= vragenLong[vragenLong$array == array,c("PROJECT_PSEUDO_ID", q,colnames(prs)[-1],"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days", "days2", "array" )],na.action=na.omit, control = lmeControl(opt = "optim"))
-    tTable <- summary(res)$tTable
-    zScores <- qnorm((tTable[,"p-value"]/2)) 
-    zScores[is.infinite(zScores)] <- -30
-    zScores[tTable[,"Value"] > 0] <- zScores[tTable[,"Value"] > 0] * -1
-    return(zScores)
+  
+    resultsPerArray <- lapply(arrayList, function(array){
+      fixedModel <- as.formula(paste(q, "~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", paste(colnames(prs)[-1], collapse = " + ") ,")*days + days2 ) "))
+      randomModel <- as.formula("~1|PROJECT_PSEUDO_ID")
+      res <-  lme(fixed = fixedModel, random=randomModel, data= vragenLong[vragenLong$array == array,c("PROJECT_PSEUDO_ID", q,colnames(prs)[-1],"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days", "days2", "array" )],na.action=na.omit)#, control = lmeControl(opt = "optim")
+      tTable <- summary(res)$tTable
+      
+      zscore <- apply(tTable, 1, function(x){
+        if(x["t-value"] > 0){
+          return(-qnorm(pt(x["t-value"], x["DF"], lower.tail=FALSE, log.p = T),log.p = T))
+        } else {
+          return(qnorm(pt(x["t-value"], x["DF"], lower.tail=TRUE, log.p = T),log.p = T))
+        }
+      })
+      return(cbind(tTable, zscore))
+    })
   }, error = function(e){print(q); return(NULL)})
   return(zScores)
 })
-
+cor.test(matrix())
 str(zScoreList)
 zScoreList2 <- zScoreList[!sapply(zScoreList, is.null)]
 
@@ -179,18 +225,20 @@ write.table(zscores, file = "zscoreMatrix.txt", sep = "\t", quote = F, col.names
 
 #below is testingground
 
+plot(resultsPerArray[["Cyto"]][,"zscore"], resultsPerArray[["Gsa"]][,"zscore"])
+dev.off()
+
+
 str(anova(res4,res5))
+
 
 d <- vragenLong[vragenLong$array == array & !is.na(vragenLong[,q]),]
 
+prsTrait = "Neuroticism"
 
-
-
-prsRange <- quantile(d[,"Neuroticism"],probs = seq(0,1,0.1))
+prsRange <- quantile(d[,prsTrait],probs = seq(0,1,0.1))
 dayRange <- range(d[,"days"])
 
-days = seq(dayRange[1], dayRange[2], 1)
-days2 = days * days
 
 str(res3)
 
@@ -200,8 +248,14 @@ coef <- tTable[,"Value"]
 
 length(coef)
 
-plot(days, coef["(Intercept)"] + coef["days"] * days + coef["days2"] * days2 + prsRange[10] * days * coef["Neuroticism:days"] + coef["Neuroticism"] * prsRange[10], col = "red", type = "l", ylim = c(5,7.2), ylab = "Quality of life prediciton by model", xlab = "Dagen sinds 30 maart 2020", main = "Red is high neurotism PRS and blue is low PRS")
-points(days, coef["(Intercept)"] + coef["days"] * days + coef["days2"] * days2 + prsRange[1] * days * coef["Neuroticism:days"] + coef["Neuroticism"] * prsRange[1], col = "blue", type = "l")
+
+days = seq(dayRange[1], dayRange[2], 1)
+days2 = days * days
+
+
+
+plot(days, coef["(Intercept)"] + coef["days"] * days + coef["days2"] * days2 + prsRange[10] * days * coef[paste0(prsTrait,":days")] + coef[prsTrait] * prsRange[10], col = "red", type = "l", ylab = q, xlab = "Dagen sinds 30 maart 2020", main = paste0("Red is high ", prsTrait, " PRS\nBlue is low PRS"))
+points(days, coef["(Intercept)"] + coef["days"] * days + coef["days2"] * days2 + prsRange[1] * days * coef[paste0(prsTrait,":days")] + coef[prsTrait] * prsRange[1], col = "blue", type = "l")
 dev.off()
 
 plot(days, coef["(Intercept)"] + coef["days"] * days + coef["days2"] * days2 + prsRange[10] * days * coef["Neuroticism:days"] + coef["Neuroticism"] * prsRange[5], col = "red", type = "l", ylim = c(2,7), ylab = "Quality of life prediciton by model", xlab = "Dagen sinds 30 maart 2020", main = "Red is high neurotism PRS and blue is low PRS")
