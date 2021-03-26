@@ -329,9 +329,11 @@ prsRange <- quantile(prs[,prsTrait],probs = seq(0,1,0.1))
 dummy <- vragenLong[1:307,c(q,colnames(prs)[-1],"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days", "days2")]
 dummy$days <- 1:307
 dummy$days2 <- dummy$days * dummy$days
-dummy[,colnames(prs)] <- 0
-dummy[,"age_recent"] <- 0
-dummy[,"age2_recent"] <- 0
+for(prsCol in colnames(prs)[-1]){
+  dummy[,prsCol] <- mean(prs[,prsCol])
+}
+dummy[,"age_recent"] <- mean(pheno3$age_recent)
+dummy[,"age2_recent"] <- dummy[,"age_recent"] * dummy[,"age_recent"]
 dummy[,"household_recent"] <- levels(dummy[,"household_recent"])[1]
 dummy[,"have_childs_at_home_recent"] <- levels(dummy[,"have_childs_at_home_recent"])[1]
 dummy[,"gender_recent"] <- levels(dummy[,"gender_recent"])[1]
@@ -339,9 +341,10 @@ dummy[,"chronic_recent"] <- levels(dummy[,"chronic_recent"])[1]
 
 dummy[,prsTrait] <- prsRange[1]
 predictLow <- predict(glmBinomFit, dummy, type = "response")
+dummy[,prsTrait] <- mean(prs[,prsTrait])
+predictMedium <- predict(glmBinomFit, dummy, type = "response")
 dummy[,prsTrait] <- prsRange[10]
 predictHigh <- predict(glmBinomFit, dummy, type = "response")
-
 
 
 plot.new()
@@ -350,6 +353,7 @@ axis(side = 1)
 axis(side = 2)
 title(xlab = "days", ylab = "C19 pos")
 points(predictLow, col = "blue", type = "l")
+points(predictMedium, col = "green", type = "l")
 points(predictHigh, col = "red", type = "l")
 dev.off()
 
@@ -369,6 +373,10 @@ table(d[,q] )
 
 apply(d, 2, range)
 
+dMean <- mean(d$days)
+dSd <- sd(d$days)
+
+(range(d$days)-dMean)/dSd
 
 d2 <- lapply(d, function(x){
   if(is.numeric(x)){
@@ -385,6 +393,40 @@ glmMerFit <- glmer(model, data = d2, family = binomial, nAGQ=0 )#glmerControl(op
 summary(glmMerFit)$coefficients
 
 
+
+prsTrait = "COVID.19.susceptibility"
+prsRange <- quantile(d2[,prsTrait],probs = seq(0,1,0.1))
+
+
+dummy <- d2[1:307,c("PROJECT_PSEUDO_ID", q,colnames(prs)[-1],"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days", "days2")]
+dummy$PROJECT_PSEUDO_ID = "A"
+dummy$days <- (1:307-dMean)/dSd
+dummy$days2 <- dummy$days * dummy$days
+dummy[,colnames(prs)] <- 0
+dummy[,"age_recent"] <- 0
+dummy[,"age2_recent"] <- 0
+dummy[,"household_recent"] <- levels(dummy[,"household_recent"])[1]
+dummy[,"have_childs_at_home_recent"] <- levels(dummy[,"have_childs_at_home_recent"])[1]
+dummy[,"gender_recent"] <- levels(dummy[,"gender_recent"])[1]
+dummy[,"chronic_recent"] <- levels(dummy[,"chronic_recent"])[1]
+
+dummy[,prsTrait] <- prsRange[1]
+predictLow <- predict(glmMerFit, dummy, type = "response", re.form = NA)
+dummy[,prsTrait] <- mean(d2[,prsTrait])
+predictMedium <- predict(glmMerFit, dummy, type = "response", re.form = NA)
+dummy[,prsTrait] <- prsRange[10]
+predictHigh <- predict(glmMerFit, dummy, type = "response", re.form = NA)
+
+
+plot.new()
+plot.window(xlim = c(1,307), ylim = range(predictLow, predictHigh))
+axis(side = 1)
+axis(side = 2)
+title(xlab = "days", ylab = "C19 pos")
+points(predictLow, col = "blue", type = "l")
+points(predictMedium, col = "green", type = "l")
+points(predictHigh, col = "red", type = "l")
+dev.off()
 
 
 
