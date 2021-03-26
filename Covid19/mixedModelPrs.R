@@ -10,7 +10,7 @@ library("ordinal")
 library("GLMMadaptive")
 library(readr)
 library(lme4)
-
+library(meta)
 
 if(FALSE){
   #Run once to conver pheno data to RDS format
@@ -53,6 +53,11 @@ if(!all(!row.names(prsGsa$PROJECT_PSEUDO_ID) %in% row.names(prsCyto$PROJECT_PSEU
 
 prs <- rbind(prsGsa, prsCyto)
 
+selectedTraits <- read.delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/pgs_correlations/selectedTraits.txt", header = F, stringsAsFactors = F)[,1]
+if(!all(selectedTraits %in% colnames(prs))){
+  stop("Not all traits found")
+}
+prs <- prs[,c("PROJECT_PSEUDO_ID",selectedTraits)]
 colnames(prs)[colnames(prs) == "BMI"] <- "BMI_gwas"
 
 if(!all(pheno2$PROJECT_PSEUDO_ID %in% prs$PROJECT_PSEUDO_ID)){
@@ -64,7 +69,15 @@ pheno2$array <- factor(as.numeric(pheno2$PROJECT_PSEUDO_ID %in% prsGsa$PROJECT_P
 arrayList <- as.list(levels(pheno2$array))
 names(arrayList) <- levels(pheno2$array)
 
+
+
 pheno3 <- merge(pheno2, prs, by = "PROJECT_PSEUDO_ID")
+
+# Exclude some black lised samples
+
+blackList <- read.delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/PROJECT_IDS_EARLIER_FILLED_IN.txt", row.names = NULL, sep = "")
+sum(pheno3$PROJECT_PSEUDO_ID %in% blackList[,1])
+pheno3 <- pheno3[!pheno3$PROJECT_PSEUDO_ID %in% blackList[,1],]
 
 
 totalPart <- nrow(pheno3)
@@ -80,12 +93,16 @@ vls <- colnames(qOverview)[-c(20,21)]
 
 
 
+
 # mask questions with >75% missing
 qOverview[,-c(20,21)] <- apply(qOverview[,-c(20,21)], 1:2, function(x){
   if(x==""){
     return ("")
   } else if(!x %in% colnames(pheno3)) {
     return("")
+  } else if(grepl("responsedate_adu", x)){
+    #always include data question
+    return(x)
   } else {
     if(sum(is.na(pheno3[,x])) >= (totalPart/4)){
       return (x)
@@ -95,8 +112,6 @@ qOverview[,-c(20,21)] <- apply(qOverview[,-c(20,21)], 1:2, function(x){
   }
 })
 
-qOverview["responsdatum covid-vragenlijst",]
-sum(qOverview == "")
 
 
 # select questions with 4 repeats spread out over first and last half
@@ -144,8 +159,6 @@ for(i in 2:ncol(qOverview2)){
   everPos[(!is.na(pheno3[,testedPos[i]]) & pheno3[,testedPos[i]] == 1) | everPos[,i-1] == 1, i] <- 1
 }
 
-#apply(everPos, 2, sum)
-
 if(any(colnames(everPos) %in% colnames(pheno3))){
   stop("Duplicate col names")
 }
@@ -157,6 +170,7 @@ pheno3 <- merge(pheno3, everPos, by.x = "PROJECT_PSEUDO_ID", by.y = 0)
 if(any(names(qList) %in% colnames(pheno3))){
   stop("Column name clash after reshape")
 }
+
 
 vragenLong <- reshape(pheno3, direction = "long", idvar = "PROJECT_PSEUDO_ID", varying = qList, v.names = names(qList), times = vls, timevar = "vl")
 vragenLong$vl2 <- as.numeric(factor(vragenLong$vl, levels = vls, ordered = T))
@@ -189,11 +203,12 @@ names(qLoop) <- qNameMap[,1]
 q=qLoop[[2]]
 q<-qNameMap["hoe waardeert u uw kwaliteit van leven over de afgelopen 7 dagen?",2]
 q<-qNameMap["Positive tested cumsum",2]
+q<-qNameMap["hebt u een coronavirus/covid-19 infectie (gehad)?",2]
 q<-qNameMap["everC19Pos",2]
 q<-qNameMap["BMI",2]
 zScoreList <- lapply(qLoop, function(q){
   zScores = tryCatch({
-  
+    
     resultsPerArray <- lapply(arrayList, function(array){
       fixedModel <- as.formula(paste(q, "~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", paste(colnames(prs)[-1], collapse = " + ") ,")*days + days2 ) "))
       randomModel <- as.formula("~1|PROJECT_PSEUDO_ID")
@@ -297,6 +312,110 @@ zScores[order(abs(zScores))]
 
 ###### Below is old testing stuff
 
+tTable
+
+lmFit <- glm(fixedModel,data=vragenLong[vragenLong$array == array,c("PROJECT_PSEUDO_ID", q,colnames(prs)[-1],"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days", "days2", "array" )])
+
+#### @Robert fit for normal binom below
+
+
+glmBinomFit <- glm(fixedModel ,family=binomial(link='logit'),data=vragenLong[vragenLong$array == array,c("PROJECT_PSEUDO_ID", q,colnames(prs)[-1],"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days", "days2", "array" )])
+
+
+
+prsTrait = "COVID.19.susceptibility"
+prsRange <- quantile(prs[,prsTrait],probs = seq(0,1,0.1))
+
+dummy <- vragenLong[1:307,c(q,colnames(prs)[-1],"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days", "days2")]
+dummy$days <- 1:307
+dummy$days2 <- dummy$days * dummy$days
+dummy[,colnames(prs)] <- 0
+dummy[,"age_recent"] <- 0
+dummy[,"age2_recent"] <- 0
+dummy[,"household_recent"] <- levels(dummy[,"household_recent"])[1]
+dummy[,"have_childs_at_home_recent"] <- levels(dummy[,"have_childs_at_home_recent"])[1]
+dummy[,"gender_recent"] <- levels(dummy[,"gender_recent"])[1]
+dummy[,"chronic_recent"] <- levels(dummy[,"chronic_recent"])[1]
+
+dummy[,prsTrait] <- prsRange[1]
+predictLow <- predict(glmBinomFit, dummy, type = "response")
+dummy[,prsTrait] <- prsRange[10]
+predictHigh <- predict(glmBinomFit, dummy, type = "response")
+
+
+
+plot.new()
+plot.window(xlim = range(dummy$days), ylim = range(predictLow, predictHigh))
+axis(side = 1)
+axis(side = 2)
+title(xlab = "days", ylab = "C19 pos")
+points(predictLow, col = "blue", type = "l")
+points(predictHigh, col = "red", type = "l")
+dev.off()
+
+
+
+######### @Robert mixed model below
+
+
+
+
+
+model <- as.formula(paste(q, "~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", paste(colnames(prs)[-1], collapse = " + ") ,")*days + days2 ) + (1|PROJECT_PSEUDO_ID) "))
+d <- vragenLong[vragenLong$array == array & !is.na(vragenLong[,q]) & !is.na(vragenLong[,"days"]),c("PROJECT_PSEUDO_ID", q,colnames(prs),"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days", "days2", "array" )]
+#d[,q] <- d[,q]-1
+d[,q] <- as.factor(d[,q])
+table(d[,q] )
+
+apply(d, 2, range)
+
+
+d2 <- lapply(d, function(x){
+  if(is.numeric(x)){
+    return(scale(x))
+  } else{
+    return(x)
+  }
+})
+
+d2 <- as.data.frame(d2, stringsAsFactors = F)
+str(d2)
+
+glmMerFit <- glmer(model, data = d2, family = binomial, nAGQ=0 )#glmerControl(optimizer = "nloptwrap2") #control = glmerControl(optimizer = "bobyqa")  
+summary(glmMerFit)$coefficients
+
+
+
+
+
+
+
+
+
+#### Other
+
+
+
+
+
+
+
+
+
+summary(glmBinomFit)$coefficients  
+
+
+plot(summary(lmFit)$coefficients[,"t value"], summary(glmBinomFit)$coefficients[,"z value"] )
+dev.off()
+
+
+
+write.table(cbind(summary(lmFit)$coefficients, summary(glmBinomFit)$coefficients , tTable, summary(glmMerFit)$coefficients), file = "test.txt", sep ="\t",quote = F)
+
+
+
+
+
 q<-qNameMap["hoe waardeert u uw kwaliteit van leven over de afgelopen 7 dagen?",2]
 
 question = qNameMap["op hoeveel momenten van de dag eet u iets?",2]
@@ -309,7 +428,6 @@ res <-  lme(fixed = fixedModel, random=randomModel, data= vragenLong[,c("PROJECT
 x$tTable
 
 str(vragenLong[,question])
-
 
 
 
@@ -342,13 +460,52 @@ oridnalFit <-  mixed_model(fixed = fixedModel, random=randomModel, data=d ,na.ac
 table(d[,q])
 summary(oridnalFit)
 
-model <- as.formula(paste(q, "~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", paste(colnames(prs)[-1], collapse = " + ") ,")*days + days2) + (1|PROJECT_PSEUDO_ID) "))
-d <- vragenLong[vragenLong$array == array & !is.na(vragenLong[,q]),c("PROJECT_PSEUDO_ID", q,colnames(prs)[-1],"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days", "days2", "array" )]
-d[,q] <- d[,q]-1
+model <- as.formula(paste(q, "~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", paste(colnames(prs)[-1], collapse = " + ") ,")*days + days2 ) + (1|PROJECT_PSEUDO_ID) "))
+model <- as.formula(paste(q, "~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent + COVID.19.susceptibility)*days + days2) + (1|PROJECT_PSEUDO_ID) "))
+d <- vragenLong[vragenLong$array == array & !is.na(vragenLong[,q]) & !is.na(vragenLong[,"days"]),c("PROJECT_PSEUDO_ID", q,colnames(prs),"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days", "days2", "array" )]
+#d[,q] <- d[,q]-1
+d[,q] <- as.factor(d[,q])
 table(d[,q] )
-glmMerFit <- glmer (model, data = d, family = binomial, control = glmerControl(optimizer = "bobyqa"))
-summary(glmMerFit)
 
+apply(d, 2, range)
+
+str(d)
+
+d2 <- lapply(d, function(x){
+  if(is.numeric(x)){
+    return(scale(x))
+  } else{
+    return(x)
+  }
+})
+
+d2 <- as.data.frame(d2, stringsAsFactors = F)
+str(d2)
+
+d$days <- scale(d$days)
+d$days2 <- d$days * d$days
+
+d$age_recent <- scale(d$age_recent)
+d$age2_recent <- d$age_recent * d$age_recent
+
+
+library(nloptr)
+defaultControl <- list(algorithm="NLOPT_LN_BOBYQA",xtol_rel=1e-6,maxeval=1e5)
+nloptwrap2 <- function(fn,par,lower,upper,control=list(),...) {
+  for (n in names(defaultControl)) 
+    if (is.null(control[[n]])) control[[n]] <- defaultControl[[n]]
+    res <- nloptr(x0=par,eval_f=fn,lb=lower,ub=upper,opts=control,...)
+    with(res,list(par=solution,
+                  fval=objective,
+                  feval=iterations,
+                  conv=if (status>0) 0 else status,
+                  message=message))
+}
+
+glmMerFit <- glmer(model, data = d2, family = binomial, nAGQ=0 )#glmerControl(optimizer = "nloptwrap2") #control = glmerControl(optimizer = "bobyqa")  
+summary(glmMerFit)$coefficients
+
+lapply(d2, mean, na.rm = T)
 
 
 #vragenLong[,qNameMap["hoe waardeert u uw kwaliteit van leven over de afgelopen 7 dagen?",2]] <- factor(vragenLong[,qNameMap["hoe waardeert u uw kwaliteit van leven over de afgelopen 7 dagen?",2]], levels = 1:10,  ordered = T)
@@ -426,21 +583,32 @@ res <- lme(fixed=cijfer~ Neuroticism*days, random=~1+gender_recent+age_recent+ag
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 question = qNameMap["hoe waardeert u uw kwaliteit van leven over de afgelopen 7 dagen?",2]
 fixedModel <- as.formula(paste(question, "~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", paste(colnames(prs)[-1], collapse = " + ") ,"))"))
 lmFit <- lm(fixedModel, data = vragenLong[vragenLong$vl == "X2.0",])
 summary(lmFit)
+
+resultsPerArray[[1]][1,]
+resultsPerArray[[2]][1,]
+
+metagen(c(5.864397e+00, 6.849405e+00), c(7.555978e-01, 4.037785e-01))$zval.fixed
+
+x <- (resultsPerArray[[1]][1,1]/(resultsPerArray[[1]][1,2]*resultsPerArray[[1]][1,2])) + (resultsPerArray[[2]][1,1]/(resultsPerArray[[2]][1,2]*resultsPerArray[[2]][1,2]))
+y <- (1/(resultsPerArray[[1]][1,2]*resultsPerArray[[1]][1,2])) + (1/(resultsPerArray[[2]][1,2]*resultsPerArray[[2]][1,2]))
+
+
+a <- x/y
+
+
+b <- sqrt(1/y)
+
+a/b
+
+
+
+table(pheno3$array)
+
+((resultsPerArray[[1]][1,6] * 5287) + (resultsPerArray[[2]][1,6] * 12532)) / sqrt((5287*5287)+(12532*12532))
+
+
+cat(colnames(prs), sep = "\n")
