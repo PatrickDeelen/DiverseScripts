@@ -53,7 +53,7 @@ if(!all(!row.names(prsGsa$PROJECT_PSEUDO_ID) %in% row.names(prsCyto$PROJECT_PSEU
 
 prs <- rbind(prsGsa, prsCyto)
 
-selectedTraits <- read.delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/pgs_correlations/selectedTraits.txt", header = F, stringsAsFactors = F)[,1]
+selectedTraits <- read.delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/pgs_correlations/selectedTraits.txt", header = F, stringsAsFactors = F, comment.char = "#")[,1]
 if(!all(selectedTraits %in% colnames(prs))){
   stop("Not all traits found")
 }
@@ -194,6 +194,14 @@ dev.off()
 str(vragenLong)
 
 
+## Correlate PRS
+library(heatmap3)
+prsCor <- cor(prs[,-1])
+#diag(prsCor) <- 0
+rpng(width = 1000, height = 1000)
+heatmap3(prsCor, balanceColor = T, margins = c(15,15), scale = "none")
+dev.off()
+
 ## Run models
 
 qLoop <- as.list(qNameMap[,2])
@@ -210,7 +218,8 @@ zScoreList <- lapply(qLoop, function(q){
   zScores = tryCatch({
     
     resultsPerArray <- lapply(arrayList, function(array){
-      fixedModel <- as.formula(paste(q, "~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", paste(colnames(prs)[-1], collapse = " + ") ,")*days + days2 ) "))
+      fixedModel <- as.formula(paste(q, "~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent + Neuroticism)*days + days2 ) "))
+      #fixedModel <- as.formula(paste(q, "~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", paste(colnames(prs)[-1], collapse = " + ") ,")*days + days2 ) "))
       randomModel <- as.formula("~1|PROJECT_PSEUDO_ID")
       res <-  lme(fixed = fixedModel, random=randomModel, data= vragenLong[vragenLong$array == array,c("PROJECT_PSEUDO_ID", q,colnames(prs)[-1],"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days", "days2", "array" )],na.action=na.omit)#, control = lmeControl(opt = "optim")
       tTable <- summary(res)$tTable
@@ -224,6 +233,27 @@ zScoreList <- lapply(qLoop, function(q){
       })
       return(cbind(tTable, zscore))
     })
+    
+    plot(resultsPerArray[[1]][,"zscore"], resultsPerArray[[2]][,"zscore"])
+    dev.off()
+    
+    x <- as.data.frame(resultsPerArray[[1]][,FALSE])
+    x$sumYDivSe2 <- 0
+    x$sum1DivSe2 <- 0
+    
+    for(array in names(resultsPerArray)){
+      se2 <- resultsPerArray[[array]][,"Std.Error"] * resultsPerArray[[array]][,"Std.Error"]
+      x$sumYDivSe2 <- x$sumYDivSe2 + (resultsPerArray[[array]][,"Value"]/ se2)
+      x$sum1DivSe2 <- x$sum1DivSe2 + (1/se2)
+    }
+    
+    metaRes <- as.data.frame(resultsPerArray[[1]][,FALSE])
+    metaRes$y <- x$sumYDivSe2/x$sum1DivSe2
+    metaRes$se <- sqrt(1/x$sum1DivSe2)
+    metaRes$z <- metaRes$y/metaRes$se 
+    metaRes$p <- 2*pnorm(-abs(metaRes$z))
+    
+    
   }, error = function(e){print(q); return(NULL)})
   return(zScores)
 })
@@ -259,8 +289,8 @@ str(res3)
 
 str(tTable)
 
-coef <- tTable[,"Value"]
-
+coef <- as.matrix(metaRes)[,"y"]
+str(coef)
 length(coef)
 
 
@@ -338,6 +368,11 @@ dummy[,"household_recent"] <- levels(dummy[,"household_recent"])[1]
 dummy[,"have_childs_at_home_recent"] <- levels(dummy[,"have_childs_at_home_recent"])[1]
 dummy[,"gender_recent"] <- levels(dummy[,"gender_recent"])[1]
 dummy[,"chronic_recent"] <- levels(dummy[,"chronic_recent"])[1]
+
+
+test <- predict(glmBinomFit, type = "terms", newdata = dummy)
+test[,"Neuroticism:days"]
+
 
 dummy[,prsTrait] <- prsRange[1]
 predictLow <- predict(glmBinomFit, dummy, type = "response")
