@@ -201,16 +201,29 @@ rownames(selectedQ) <- selectedQ[,"qId"]
 
 ## Correlate PRS
 library(heatmap3)
-prsCor <- cor(prs[,-1])
+prsCor <- cor(prs[prs[,1] %in% pheno3[pheno3$array=="Gsa","PROJECT_PSEUDO_ID"],-1])
 #diag(prsCor) <- 0
 rpng(width = 1000, height = 1000)
 heatmap3(prsCor, balanceColor = T, margins = c(15,15), scale = "none")
 dev.off()
 
+
+t.test(pheno3[pheno3$array=="Gsa","General.risky.behavior"], pheno3[pheno3$array=="Cyto","General.risky.behavior"])
+boxplot(pheno3[pheno3$array=="Gsa","General.risky.behavior"], pheno3[pheno3$array=="Cyto","General.risky.behavior"])
+dev.off()
+
+t.test(pheno3[pheno3$array=="Gsa","BMI_gwas"], pheno3[pheno3$array=="Cyto","BMI_gwas"])
+boxplot(pheno3[pheno3$array=="Gsa","BMI_gwas"], pheno3[pheno3$array=="Cyto","BMI_gwas"])
+dev.off()
+
+
+
+
 ## Run models
 
 qLoop <- as.list(selectedQ[,"Question"])
 names(qLoop) <- selectedQ[,"qId"]
+
 
 
 q=qLoop[[2]]
@@ -223,23 +236,40 @@ zScoreList <- lapply(qLoop, function(q){
   zScores = tryCatch({
     
     qInfo <- selectedQ[q,]
+    usedPrs <- colnames(prs)[-1]
     
     resultsPerArray <- lapply(arrayList, function(array){
-      fixedModel <- as.formula(paste(q, "~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", paste(colnames(prs)[-1], collapse = " + ") ,")*days + days2 ) "))
-      randomModel <- as.formula("~1|vl")
-      if(qInfo["Type"] == "gaussian" & qInfo["Mixed"]){
-        res <-  lme(fixed = fixedModel, random=randomModel, data= vragenLong[ vragenLong$array == array,c("PROJECT_PSEUDO_ID", q,colnames(prs)[-1],"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days", "days2", "array", "vl" )],na.action=na.omit)#, control = lmeControl(opt = "optim")
-        tTable <- summary(res)$tTable
-      } else if (qInfo["Type"] == "gaussian" & !qInfo["Mixed"]) {
-        stop("Not implement")
-      } else if (qInfo["Type"] == "gaussian" & qInfo["Mixed"]) {
-        stop("Not implement")
-      } else if (qInfo["Type"] == "gaussian" & !qInfo["Mixed"]) {
-        stop("Not implement")
-      }
       
-      return(tTable)
+      d <- vragenLong[!is.na(vragenLong[,q]) & vragenLong$array == array,c("PROJECT_PSEUDO_ID", q,usedPrs,"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days", "days2", "array" )]
+      fixedModel <- as.formula(paste(q, "~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", paste0(usedPrs, collapse = " + ") ,")*days + days2 ) "))
+      randomModel <- as.formula("~1|PROJECT_PSEUDO_ID")
+      
+      coef <- 0
+      
+      if(qInfo["Type"] == "gaussian" & qInfo["Mixed"]){
+        print("test1")
+        res <-  lme(fixed = fixedModel, random=randomModel, data=d,na.action=na.omit)#, control = lmeControl(opt = "optim")
+        coef <- summary(res)$tTable
+      } else if (qInfo["Type"] == "gaussian" & !qInfo["Mixed"]) {
+        print("test2")
+        stop("Not implement")
+      } else if (qInfo["Type"] == "binomial" & qInfo["Mixed"]) {
+        print("test3")
+        stop("Not implement")
+      } else if (qInfo["Type"] == "binomial" & !qInfo["Mixed"]) {
+        d[,q] <- as.factor(d[,q])
+        glmBinomFit <- glm(fixedModel ,family=binomial(link='logit'),data=d)
+        coef <- summary(glmBinomFit)$coefficients
+        colnames(coef)[1:2]<-c("Value", "Std.Error")
+      }
+
+      return(coef)
     })
+    
+    str(resultsPerArray)
+    
+    resultsPerArray[["Gsa"]]
+    resultsPerArray[["Cyto"]]
     
     metaRes <- inverseVarianceMeta(resultsPerArray, "Std.Error", "Value")
     
@@ -266,6 +296,44 @@ inverseVarianceMeta <- function(resultsPerArray, seCol, valueCol){
   metaRes$p <- 2*pnorm(-abs(metaRes$z))
   return(metaRes)
 }
+
+
+
+
+
+
+# Function to predict outcome values given a set of coefficients,
+# input days, input PRSs, the trait corresponding to the input PRS, 
+# and the function family and link function
+predict.meta <- function(days, prs, coefficients, trait, family = gaussian()) {
+  # Define days to the power of 2
+  days2 <- days^2
+  # Calculate the predicted valus on a regular linear scale
+
+  predicted <-
+    coefficients["(Intercept)"] +
+    coefficients["days"] * days + 
+    coefficients["days2"] * days2 + 
+    prs * days * coefficients[paste0(trait,":days")] 
+    +    coefficients[trait] * prs
+  # Return values according to the linear inverse of the link function
+  return(family$linkinv(predicted))
+}
+# Use function
+
+prsTrait = "Anxiety.tension"
+prsTrait = "COVID.19.susceptibility"
+prsRange <- quantile(vragenLong[,prsTrait],probs = seq(0,1,0.5),na.rm=T)
+coef2 = as.matrix(coef)[,"Value"]
+days = seq(1, 307, 1)
+highPrs <- predict.meta(days = days, coefficients = coef2, trait = prsTrait, prs = prsRange[3], family = binomial(link = "logit"))
+medianPrs <- predict.meta(days = days, coefficients = coef2, trait = prsTrait, prs = prsRange[2], family = binomial(link = "logit"))
+lowPrs <- predict.meta(days = days, coefficients = coef2, trait = prsTrait, prs = prsRange[1], family = binomial(link = "logit"))
+
+plot(days, highPrs, ylim = range(lowPrs, medianPrs, highPrs),  col = "red", type = "l", ylab = q, xlab = "Dagen sinds 30 maart 2020", main = paste0("Red is high ", prsTrait, " PRS\nBlue is low PRS"))
+points(days, medianPrs, col = "green", type = "l")
+points(days, lowPrs, col = "blue", type = "l")
+dev.off()
 
 
 
@@ -385,7 +453,7 @@ glmBinomFit <- glm(fixedModel ,family=binomial(link='logit'),data=d)
 summary(glmBinomFit)
 
 
-prsTrait = "COVID.19.susceptibility"
+prsTrait = "Anxiety.tension"
 prsRange <- quantile(prs[,prsTrait],probs = seq(0,1,0.1))
 
 dummy <- vragenLong[1:307,c(q,colnames(prs)[-1],"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days", "days2")]
@@ -393,8 +461,10 @@ dummy$days <- 1:307
 dummy$days2 <- dummy$days * dummy$days
 for(prsCol in colnames(prs)[-1]){
   dummy[,prsCol] <- mean(prs[,prsCol])
+  dummy[,prsCol] <- 0
 }
 dummy[,"age_recent"] <- mean(pheno3$age_recent)
+dummy[,"age_recent"] <- 0
 dummy[,"age2_recent"] <- dummy[,"age_recent"] * dummy[,"age_recent"]
 dummy[,"household_recent"] <- levels(dummy[,"household_recent"])[1]
 dummy[,"have_childs_at_home_recent"] <- levels(dummy[,"have_childs_at_home_recent"])[1]
@@ -402,15 +472,15 @@ dummy[,"gender_recent"] <- levels(dummy[,"gender_recent"])[1]
 dummy[,"chronic_recent"] <- levels(dummy[,"chronic_recent"])[1]
 
 
-test <- predict(glmBinomFit, type = "terms", newdata = dummy)
-test[,"Neuroticism:days"]
+#test <- predict(glmBinomFit, type = "terms", newdata = dummy)
+#test[,"Neuroticism:days"]
 
 
 dummy[,prsTrait] <- prsRange[1]
-predictLow <- predict(glmBinomFit, dummy, type = "response")
-dummy[,prsTrait] <- mean(prs[,prsTrait])
+predictLow <- predict.glm(glmBinomFit, dummy, type = "response")
+dummy[,prsTrait] <- prsRange[2]
 predictMedium <- predict(glmBinomFit, dummy, type = "response")
-dummy[,prsTrait] <- prsRange[10]
+dummy[,prsTrait] <- prsRange[3]
 predictHigh <- predict(glmBinomFit, dummy, type = "response")
 
 
