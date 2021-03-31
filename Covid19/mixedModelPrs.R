@@ -94,7 +94,7 @@ vls <- colnames(qOverview)[-c(20,21)]
 
 
 
-# mask questions with >75% missing
+
 qOverview[,-c(20,21)] <- apply(qOverview[,-c(20,21)], 1:2, function(x){
   if(x==""){
     return ("")
@@ -104,11 +104,13 @@ qOverview[,-c(20,21)] <- apply(qOverview[,-c(20,21)], 1:2, function(x){
     #always include data question
     return(x)
   } else {
-    if(sum(is.na(pheno3[,x])) >= (totalPart/4)){
-      return (x)
-    } else {
-      return ("")
-    }
+    return(x)#no masking
+    # mask questions with >75% missing
+    #if(sum(is.na(pheno3[,x])) >= (totalPart/4)){
+    #  return (x)
+    #} else {
+      #return ("")
+    #}
   }
 })
 
@@ -208,6 +210,8 @@ dev.off()
 selectedQ <- read.delim("selectedQs.txt", stringsAsFactors = F)
 selectedQ$qId <- qNameMap[selectedQ[,"Question"],2]
 rownames(selectedQ) <- selectedQ[,"qId"]
+
+sum(table(selectedQ[,"qId"]) > 1)
 
 ## Correlate PRS
 library(heatmap3)
@@ -465,6 +469,7 @@ summary(glmBinomFit)
 
 
 prsTrait = "Anxiety.tension"
+prsTrait = "COVID.19.susceptibility"
 prsRange <- quantile(prs[,prsTrait],probs = seq(0,1,0.1))
 
 dummy <- vragenLong[1:307,c(q,colnames(prs)[-1],"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days", "days2")]
@@ -472,10 +477,10 @@ dummy$days <- 1:307
 dummy$days2 <- dummy$days * dummy$days
 for(prsCol in colnames(prs)[-1]){
   dummy[,prsCol] <- mean(prs[,prsCol])
-  dummy[,prsCol] <- 0
+  #dummy[,prsCol] <- 0
 }
 dummy[,"age_recent"] <- mean(pheno3$age_recent)
-dummy[,"age_recent"] <- 0
+#dummy[,"age_recent"] <- 0
 dummy[,"age2_recent"] <- dummy[,"age_recent"] * dummy[,"age_recent"]
 dummy[,"household_recent"] <- levels(dummy[,"household_recent"])[1]
 dummy[,"have_childs_at_home_recent"] <- levels(dummy[,"have_childs_at_home_recent"])[1]
