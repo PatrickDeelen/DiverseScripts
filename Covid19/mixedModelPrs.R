@@ -191,8 +191,18 @@ vragenLong$chronic_recent <- factor(vragenLong$chronic_recent, levels = 0:1, lab
 hist(vragenLong$days, breaks = 330)
 dev.off()
 
-str(vragenLong)
 
+## Add oxfor goverment repsonse index
+
+gri <- read.delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/jobs/OxCGRT/OxCGRT_Netherlands.txt", stringsAsFactors = F)
+row.names(gri) <- gri$Date
+
+vragenLong$GovernmentResponseIndex <- gri[as.character(vragenLong[,qNameMap["responsdatum covid-vragenlijst",2]]),"GovernmentResponseIndex"]
+
+
+plot(gri$GovernmentResponseIndex, gri$StringencyIndex)
+cor.test(gri$GovernmentResponseIndex, gri$StringencyIndex)
+dev.off()
 ## Read selected questions
 
 selectedQ <- read.delim("selectedQs.txt", stringsAsFactors = F)
@@ -240,8 +250,9 @@ zScoreList <- lapply(qLoop, function(q){
     
     resultsPerArray <- lapply(arrayList, function(array){
       
-      d <- vragenLong[!is.na(vragenLong[,q]) & vragenLong$array == array,c("PROJECT_PSEUDO_ID", q,usedPrs,"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days", "days2", "array" )]
-      fixedModel <- as.formula(paste(q, "~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", paste0(usedPrs, collapse = " + ") ,")*days + days2 ) "))
+      d <- vragenLong[!is.na(vragenLong[,q]) & vragenLong$array == array,c("PROJECT_PSEUDO_ID", q,usedPrs,"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days", "days2", "array","GovernmentResponseIndex" )]
+      fixedModel <- as.formula(paste(q, "~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", paste0(usedPrs, collapse = " + ") ,")*days + days2  ) "))
+      #fixedModel <- as.formula(paste(q, "~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", paste0(usedPrs, collapse = " + ") ,")* GovernmentResponseIndex * days )"))
       randomModel <- as.formula("~1|PROJECT_PSEUDO_ID")
       
       coef <- 0
