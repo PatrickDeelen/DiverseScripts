@@ -370,7 +370,7 @@ q<-qNameMap["kon u zich bijna elke dag moeilijk concentreren of moeilijk besliss
 q<-qNameMap["everC19Pos",2]
 q<-qNameMap["BMI",2]
 q<-qNameMap["Mini combined, depressief score",2]
-q<-qNameMap["hebt u zich tijdens de afgelopen 7 dagen voortdurend somber of depressief gevoeld gedurende het grootste gedeelte van de dag, en dit bijna elke dag?",2]
+q<-qNameMap["hoeveel zorgen maakte u zich de afgelopen 7 dagen over de corona-crisis?",2]
 zScoreList <- lapply(qLoop, function(q){
   zScores = tryCatch({
     
@@ -401,6 +401,7 @@ zScoreList <- lapply(qLoop, function(q){
         stop("Not implement")
       } else if (qInfo["Type"] == "binomial" & qInfo["Mixed"]) {
         print("test3")
+        d[,q] <- d[,q] -1
         glmMerFit <- glmer(fullModel, data = d, family = binomial, nAGQ=0 )
         summary(glmMerFit)$coefficients
       } else if (qInfo["Type"] == "binomial" & !qInfo["Mixed"]) {
@@ -548,6 +549,8 @@ summary(glmBinomFit)
 prsTrait = "Major.depressive.disorder.in.trauma.exposed.individuals"
 prsTrait = "COVID.19.susceptibility"
 prsTrait = "Anxiety.tension"
+prsTrait = "Schizophrenia"
+prsTrait = "EduYears"
 prsRange <- quantile(prs[,prsTrait],probs = seq(0,1,0.1))
 
 dummy <- vragenLong[1:307,c(q,colnames(prs)[-1],"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days", "days2")]
@@ -578,18 +581,19 @@ dummy[,prsTrait] <- prsRange[2]
 lowPrs <- predict_meta(df = dummy, coefficients = coef, formula = fixedModel, family = binomial(link = "logit"))
 
 
-
+rpng(width = 800, height = 800)
 plot.new()
 plot.window(xlim = range(dummy$days), ylim = range(lowPrs, medianPrs, highPrs))
 axis(side = 1)
 axis(side = 2)
-title(xlab = "days", ylab = "C19 pos")
+title(xlab = "days", ylab = "hoeveel zorgen maakte u zich de afgelopen 7 dagen over de corona-crisis?", main = prsTrait)
 points(lowPrs, col = "blue", type = "l")
 points(medianPrs, col = "green", type = "l")
 points(highPrs, col = "red", type = "l")
 dev.off()
 
-
+barplot(table(vragenLong[,q]))
+dev.off()
 
 ######### @Robert mixed model below
 
