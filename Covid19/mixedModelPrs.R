@@ -4,6 +4,9 @@ remoter::client("localhost", port = 55556, password = "laberkak")
 
 setwd("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/pgs_correlations/")
 
+#save.image(file = "workspacePatrick.RData")
+#load("workspacePatrick.RData")
+
 library("nlme")
 library(heatmap3)
 library("ordinal")
@@ -11,7 +14,7 @@ library("GLMMadaptive")
 library(readr)
 library(lme4)
 library(meta)
-
+library(survival)
 
 
 #Functions:
@@ -106,12 +109,14 @@ inverseVarianceMeta <- function(resultsPerArray, seCol, valueCol){
 
 if(FALSE){
   #Run once to conver pheno data to RDS format
-  pheno <- read_delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/questtionnaire_data_subset_genome_filter_correct_filled_questionnaires/covid_export_questionnaire_1-17_questionnaire_filter_genome_correct_filled_18-03-2021.txt", delim = "\t", quote = "", guess_max = 100000)
+  pheno <- read_delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/combined_questionnaires_v5_03-04-2021_genome_fitered/questionaire_df_subset_participants_with_genome_data_03-04-2021.txt", delim = "\t", quote = "", guess_max = 100000)
   dim(pheno)
   pheno2 <- as.data.frame(pheno)
   row.names(pheno2) <- pheno2[,1]
   
-  saveRDS(pheno2, "/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/questtionnaire_data_subset_genome_filter_correct_filled_questionnaires/covid_export_questionnaire_1-17_questionnaire_filter_genome_correct_filled_18-03-2021.rds")
+  colnames(pheno2)[1] <- "PROJECT_PSEUDO_ID"
+  
+  saveRDS(pheno2, "/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/combined_questionnaires_v5_03-04-2021_genome_fitered/questionaire_df_subset_participants_with_genome_data_03-04-2021.rds")
   
 }
 
@@ -122,7 +127,7 @@ confounders <- c("gender_recent", "age_recent", "age2_recent", "chronic_recent",
 
 
 ##load pheno and prs
-pheno2 <- readRDS("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/questtionnaire_data_subset_genome_filter_correct_filled_questionnaires/covid_export_questionnaire_1-17_questionnaire_filter_genome_correct_filled_18-03-2021.rds")
+pheno2 <- readRDS("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/combined_questionnaires_v5_03-04-2021_genome_fitered/questionaire_df_subset_participants_with_genome_data_03-04-2021.rds")
 
 sampleQc <- read.delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/inclusionPerVl.txt" , stringsAsFactors = F, row.names = 1)
 
@@ -142,6 +147,31 @@ if(!all(colnames(prsGsa) == colnames(prsCyto))){
 if(!all(!row.names(prsGsa$PROJECT_PSEUDO_ID) %in% row.names(prsCyto$PROJECT_PSEUDO_ID))){
   stop("Overlapping samples")
 }
+
+
+t.test(prsGsa[,"General.risky.behavior"], prsCyto[,"General.risky.behavior"])
+boxplot(prsGsa[,"General.risky.behavior"], prsCyto[,"General.risky.behavior"])
+dev.off()
+
+t.test(prsGsa[,"Anxiety.tension"], prsCyto[,"Anxiety.tension"])
+boxplot(prsGsa[,"Anxiety.tension"], prsCyto[,"Anxiety.tension"])
+dev.off()
+
+t.test(prsGsa[,"BMI"], prsCyto[,"BMI"])
+boxplot(prsGsa[,"BMI"], prsCyto[,"BMI"])
+dev.off()
+
+t.test(prsGsa[,"Neuroticism"], prsCyto[,"Neuroticism"])
+boxplot(prsGsa[,"Neuroticism"], prsCyto[,"Neuroticism"])
+dev.off()
+
+
+
+t.test(pheno3[pheno3$array=="Gsa","Anxiety.tension"], pheno3[pheno3$array=="Cyto","Anxiety.tension"])
+boxplot(pheno3[pheno3$array=="Gsa","Anxiety.tension"], pheno3[pheno3$array=="Cyto","Anxiety.tension"])
+dev.off()
+
+
 
 #Scale to zero per array
 prsGsa[,-1] <- scale(prsGsa[,-1])
@@ -179,6 +209,11 @@ sum(pheno3$PROJECT_PSEUDO_ID %in% blackList[,1])
 pheno3 <- pheno3[!pheno3$PROJECT_PSEUDO_ID %in% blackList[,1],]
 
 
+#center age
+meanAge <- mean(pheno3[,"age_recent"])
+
+pheno3[,"age_recent"] <- pheno3[,"age_recent"] - meanAge
+
 totalPart <- nrow(pheno3)
 
 #na col to use in reshapre for missing questions 
@@ -186,12 +221,8 @@ pheno3$naCOl <- NA
 
 
 ##Load and format questions meta data
-qOverview <- as.matrix(read.delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/pgs_correlations/quest_overview_nl_new_quest17_codes.txt", stringsAsFactors = F, row.names = 1))
+qOverview <- as.matrix(read.delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/pgs_correlations/quest_overview_nl_new_quest17_codes_updated.txt", stringsAsFactors = F, row.names = 1))
 vls <- colnames(qOverview)[-c(20,21)]
-
-
-
-
 
 
 qOverview[,-c(20,21)] <- apply(qOverview[,-c(20,21)], 1:2, function(x){
@@ -240,8 +271,8 @@ qList <- lapply(qNameMap[,1], function(q){
   return(qs)
 })
 names(qList) <- qNameMap[,2]
-qList[[qNameMap["responsdatum covid-vragenlijst",2]]]
-qList[[qNameMap["als u moet kiezen, denkt u zelf dat u een coronavirus/covid-19 infectie hebt (gehad)?",2]]]
+#qList[[qNameMap["responsdatum covid-vragenlijst",2]]]
+#qList[[qNameMap["als u moet kiezen, denkt u zelf dat u een coronavirus/covid-19 infectie hebt (gehad)?",2]]]
 
 
 
@@ -253,6 +284,8 @@ qList[["everC19Pos"]] <- everPosQNames
 qNameMap <- rbind(qNameMap, c("everC19Pos","everC19Pos"))
 rownames(qNameMap)[nrow(qNameMap)] <- "everC19Pos"
 everPos <- matrix(data = 0, nrow = nrow(pheno3), ncol = ncol(qOverview2) , dimnames = list(row.names = pheno3$PROJECT_PSEUDO_ID, col.names = everPosQNames) )
+
+#apply(everPos, 2, sum)
 
 everPos[!is.na(pheno3[,testedPos[1]]) & pheno3[,testedPos[1]] == 1, 1] <- 1
 
@@ -321,15 +354,6 @@ heatmap3(prsCor, balanceColor = T, margins = c(15,15), scale = "none")
 dev.off()
 
 
-#t.test(pheno3[pheno3$array=="Gsa","General.risky.behavior"], pheno3[pheno3$array=="Cyto","General.risky.behavior"])
-#boxplot(pheno3[pheno3$array=="Gsa","General.risky.behavior"], pheno3[pheno3$array=="Cyto","General.risky.behavior"])
-#dev.off()
-
-#t.test(pheno3[pheno3$array=="Gsa","BMI_gwas"], pheno3[pheno3$array=="Cyto","BMI_gwas"])
-#boxplot(pheno3[pheno3$array=="Gsa","BMI_gwas"], pheno3[pheno3$array=="Cyto","BMI_gwas"])
-#dev.off()
-
-
 
 
 ## Run models
@@ -345,22 +369,27 @@ q<-qNameMap["Positive tested cumsum",2]
 q<-qNameMap["kon u zich bijna elke dag moeilijk concentreren of moeilijk beslissingen nemen? (in de afgelopen 7 dagen)",2]
 q<-qNameMap["everC19Pos",2]
 q<-qNameMap["BMI",2]
-q<-qNameMap["ik ben bang dat het fout zal gaan in de samenleving (in de afgelopen 7 dagen)",2]
+q<-qNameMap["Mini combined, depressief score",2]
+q<-qNameMap["hebt u zich tijdens de afgelopen 7 dagen voortdurend somber of depressief gevoeld gedurende het grootste gedeelte van de dag, en dit bijna elke dag?",2]
 zScoreList <- lapply(qLoop, function(q){
   zScores = tryCatch({
     
     qInfo <- selectedQ[q,]
     usedPrs <- colnames(prs)[-1]
-    usedPrs <- "Neuroticism"
-    usedPrs <- "Anxiety.tension"
-    fixedModel <- as.formula(paste(q, "~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", paste0(usedPrs, collapse = " + ") ,")*days + days2  ) "))
-    randomModel <- as.formula("~1|PROJECT_PSEUDO_ID")
+    #usedPrs <- "Neuroticism"
+    #usedPrs <- "Anxiety.tension"
+    
+    fixedString <- paste(q, "~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", paste0(usedPrs, collapse = " + ") ,")*days + days2  ) ")
+    randomString <- "1|PROJECT_PSEUDO_ID"
+    fixedModel <- as.formula(fixedString)
+    randomModel <- as.formula(paste0("~",randomString))
+    fullModel <- as.formula(paste0(fixedString, "+ (", randomString, ")"))
         
     resultsPerArray <- lapply(arrayList, function(array){
       
-      d <- vragenLong[!is.na(vragenLong[,q]) & vragenLong$array == array,c("PROJECT_PSEUDO_ID", q,usedPrs,"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days", "days2")]
-
+      d <- vragenLong[!is.na(vragenLong[,q]) & vragenLong$array == array,c("PROJECT_PSEUDO_ID", q,usedPrs,"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days", "days2", "vl")]
       
+      table(d[,"vl"])
       coef <- 0
       
       if(qInfo["Type"] == "gaussian" & qInfo["Mixed"]){
@@ -372,7 +401,8 @@ zScoreList <- lapply(qLoop, function(q){
         stop("Not implement")
       } else if (qInfo["Type"] == "binomial" & qInfo["Mixed"]) {
         print("test3")
-        stop("Not implement")
+        glmMerFit <- glmer(fullModel, data = d, family = binomial, nAGQ=0 )
+        summary(glmMerFit)$coefficients
       } else if (qInfo["Type"] == "binomial" & !qInfo["Mixed"]) {
         print("test4")
         d[,q] <- as.factor(d[,q])
@@ -388,7 +418,7 @@ zScoreList <- lapply(qLoop, function(q){
     #resultsPerArray[["Cyto"]]
     
     metaRes <- inverseVarianceMeta(resultsPerArray, "Std.Error", "Value")
-    metaRes
+    return(as.matrix(metaRes)[,"z"])
   }, error = function(e){print(q); return(NULL)})
   return(zScores)
 })
@@ -862,3 +892,231 @@ table(pheno3$array)
 
 
 cat(colnames(prs), sep = "\n")
+
+
+
+
+
+
+
+
+
+
+
+library(survival)
+
+
+
+q<-qNameMap["everC19Pos",2]
+
+usedPrs <- "Anxiety.tension"
+usedPrs <- "COVID.19.susceptibility"
+survModel <- as.formula(paste(" Surv(days, ",q,") ~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", paste0(usedPrs, collapse = " + ") ,")*days + days2  ) "))
+
+d <- vragenLong[!is.na(vragenLong[,q]) & vragenLong$array == array,c("PROJECT_PSEUDO_ID", q,usedPrs,"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days", "days2")]
+
+
+    
+km_fit <- survfit(Surv(days, everC19Pos) ~ have_childs_at_home_recent, data=d)
+summary(km_fit, times = c(1,30,60,90*(1:10)))          
+  
+rpng(width = 800, height = 800)
+plot(km_fit, xlab="Days", main = 'C19 incidence', col = 1:2, lwd=2, mark.time=FALSE) 
+dev.off()
+
+
+coxph(formula = survModel, data = d)
+
+x<-vragenLong[x[,"PROJECT_PSEUDO_ID"]=="01682c11-d9a5-4434-a1f6-bf3b418dea30" | x[,"PROJECT_PSEUDO_ID"]=="1523a46-5a67-4b4e-be30-9d79210e0f10",]
+str(x)
+split(x, x[,"PROJECT_PSEUDO_ID"])
+
+vragenLong[vragenLong[,"everC19Pos"] == 1,"PROJECT_PSEUDO_ID"][10]
+
+
+vlDates <- read.delim("sendDates.txt", stringsAsFactors = T, row.names = 1)
+vlDates[,1] <- as.Date(vlDates[,1], format = "%Y-%m-%d")
+vlDates <- vlDates[order(vlDates[,1]),,drop=F]
+
+
+id="01682c11-d9a5-4434-a1f6-bf3b418dea30"
+id="09b31120-caf0-4e3a-9006-31294b1b4411"
+
+
+lastDate <- max(vragenLong[,qNameMap["responsdatum covid-vragenlijst",2]], na.rm =T)
+usedPrs <- colnames(prs)[-1]
+
+covid19Events <- lapply(pheno3$PROJECT_PSEUDO_ID, function(id){
+  idVragen <- vragenLong[vragenLong[,"PROJECT_PSEUDO_ID"] == id,c(qNameMap["hebt u een coronavirus/covid-19 infectie (gehad)?",2],"vl", qNameMap["responsdatum covid-vragenlijst",2],usedPrs,"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "array", "days", "days2")]
+  
+  
+  firstVlPos <- which(idVragen[,qNameMap["hebt u een coronavirus/covid-19 infectie (gehad)?",2]] == 1)[1]
+  
+  
+  if(!is.na(firstVlPos)){
+    firstPosDate <- idVragen[firstVlPos,qNameMap["responsdatum covid-vragenlijst",2]]
+    
+    eventInfo <- idVragen[firstVlPos,]
+    eventInfo$eventDate <- firstPosDate
+    eventInfo$eventDays <- as.numeric(difftime(firstPosDate, startdate ,units="days"))
+    
+    return(eventInfo)
+  } else{
+    #now test for censoring 
+    
+    censorDate <- 0
+    eventInfo <- idVragen[max(which(!is.na(idVragen[,"responsdatum.covid.vragenlijst"]))),]
+    lastCompletedVl = eventInfo[,"vl"]
+    
+    if(lastCompletedVl == "X17.0"){
+      #completed
+      censorDate <- lastDate
+    } else {
+      #censoring
+      censorDate <- vlDates[which(rownames(vlDates) == lastCompletedVl)+1,]
+    }
+    
+    eventInfo$eventDate <- censorDate
+    eventInfo$eventDays <- as.numeric(difftime(censorDate, startdate ,units="days"))
+    eventInfo[,qNameMap["hebt u een coronavirus/covid-19 infectie (gehad)?",2]] <- 0
+    
+    
+    return(eventInfo)
+      
+    
+  }
+  
+  
+
+})
+
+
+covid19Events2 <- do.call("rbind", covid19Events)
+
+prsTrait = "COVID.19.susceptibility"
+prsTrait = "Anxiety.tension"
+prsRange <- quantile(prs[,prsTrait],probs = seq(0,1,0.1))
+covid19Events2$prsQuantile <- cut(covid19Events2[,prsTrait],breaks = prsRange, include.lowest = T)
+table(covid19Events2$prsQuantile)
+q<-qNameMap["hebt u een coronavirus/covid-19 infectie (gehad)?",2]
+
+table(covid19Events2[,"eventDays"], useNA="always")
+table(covid19Events2[,q], useNA="always")
+
+survModel <- as.formula(paste(" Surv(eventDays, ",q,") ~prsQuantile"))
+survModel <- as.formula(paste(" Surv(eventDays, ",q,") ~1"))
+
+km_fit <- survfit(survModel, data=covid19Events2)
+summary(km_fit, times = c(1,180,max(covid19Events2$eventDays)))          
+
+rpng(width = 800, height = 800)
+plot(km_fit, xlab="Days",conf.int = 0.95, main = 'C19 incidence', col = c("blue", rep("grey",8), "red"), lwd=2, mark.time=FALSE, ylim = c(0.8, 1)) 
+dev.off()
+
+
+#usedPrs <- c("COVID.19.susceptibility", "Anxiety.tension")
+
+array="Gsa"
+survModel <- as.formula(paste(" Surv(eventDays, ",q,") ~(", paste0(usedPrs, collapse = " + "), ")"))
+survModel <- as.formula(paste(" Surv(eventDays, ",q,") ~", paste0(c(confounders,usedPrs), collapse = " + "), "+", paste0("tt(",c(confounders, usedPrs, "days", "days2"),")", collapse = " + ")))
+a <- coxph(formula = survModel, data = covid19Events2[covid19Events2$array == "Gsa",], tt=function(x,t,...){as.numeric(x)*t})
+b <- coxph(formula = survModel, data = covid19Events2[covid19Events2$array == "Cyto",], tt=function(x,t,...){as.numeric(x)*t})
+
+a
+b
+summary(a)$coefficients
+
+plot(survfit(a))
+
+
+veteran
+plot(veteran$time, log(veteran$time+20))
+dev.off()
+
+vfit <- coxph(Surv(time, status) ~ trt + prior + karno, veteran)
+vfit
+
+
+zp <- cox.zph(vfit)
+plot(zp[3]) # a plot for the 3rd variable in the fit
+abline(0,0, col=2)
+abline(h= vfit$coef[3], col=3, lwd=2, lty=2)
+dev.off()
+
+
+vfit3 <- coxph(Surv(time, status) ~ trt + prior + karno + tt(karno),
+              data=veteran,
+               tt = function(x, t, ...) x * log(t+20))
+vfit3
+
+vfit4 <- coxph(Surv(time, status) ~ trt + prior + karno + tt(karno),
+               data=veteran,
+               tt = function(x, t, ...) (x * t))
+vfit4
+
+vfit5 <- coxph(Surv(time, status) ~ trt + prior + karno + tt(karno),
+               data=veteran,
+               tt = function(x, t, ...) cbind(x * t,x * t * t ))
+
+vfit5
+
+plot(zp[3])
+abline(coef(vfit3)[3:4], col=2)
+dev.off()
+
+
+
+
+prsTrait = "COVID.19.susceptibility"
+prsTrait = "Anxiety.tension"
+prsRange <- quantile(prs[,prsTrait],probs = seq(0,1,0.1))
+
+dummy <- vragenLong[1:307,c(q,"vl", qNameMap["responsdatum covid-vragenlijst",2],usedPrs,"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "array", "days","days2")]
+dummy$days <- 1:307
+dummy$eventDays <- 1:307
+dummy$days2 <- dummy$days * dummy$days
+for(prsCol in colnames(prs)[-1]){
+  dummy[,prsCol] <- mean(prs[,prsCol])
+  #dummy[,prsCol] <- 0
+}
+dummy[,"age_recent"] <- mean(pheno3$age_recent)
+#dummy[,"age_recent"] <- 0
+dummy[,"age2_recent"] <- dummy[,"age_recent"] * dummy[,"age_recent"]
+dummy[,"household_recent"] <- factor(levels(dummy[,"household_recent"])[1], levels = levels(dummy[,"household_recent"]))
+dummy[,"have_childs_at_home_recent"] <- factor(levels(dummy[,"have_childs_at_home_recent"])[1], levels = levels(dummy[,"have_childs_at_home_recent"]))
+dummy[,"gender_recent"] <- factor(levels(dummy[,"gender_recent"])[1], levels = levels(dummy[,"gender_recent"]))
+dummy[,"chronic_recent"] <- factor(levels(dummy[,"chronic_recent"])[1], levels = levels(dummy[,"chronic_recent"]))
+dummy[,q]
+
+dummy[,prsTrait] <- prsRange[10]
+dummy[,prsTrait] <- prsRange[6]
+dummy[,prsTrait] <- prsRange[1]
+
+str(a)
+
+  csurv1 <- predict(a,newdata=dummy, type = "risk" )
+plot(csurv1, xlab="Days")
+dev.off()
+
+dummy[,prsTrait] <- prsRange[10]
+highPrs <-  predict(a, newdata=dummy, type = type)
+dummy[,prsTrait] <- prsRange[6]
+medianPrs <- predict(a, newdata=dummy, type = type)
+dummy[,prsTrait] <- prsRange[2]
+lowPrs <- predict(a, newdata=dummy, type = type)
+
+
+rpng()
+plot.new()
+plot.window(xlim = range(dummy$days), ylim = range(lowPrs, medianPrs, highPrs))
+axis(side = 1)
+axis(side = 2)
+title(xlab = "days", ylab = "C19 pos")
+points(lowPrs, col = "blue", type = "l")
+points(medianPrs, col = "green", type = "l")
+points(highPrs, col = "red", type = "l")
+dev.off()
+
+
+
+predict.coxph
