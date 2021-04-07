@@ -353,26 +353,67 @@ rpng(width = 1000, height = 1000)
 heatmap3(prsCor, balanceColor = T, margins = c(15,15), scale = "none")
 dev.off()
 
-
+## Convert ordinal to binary
+for (qIndex in (1:nrow(selectedQ))) {
+  q <- rownames(selectedQ)[qIndex]
+  qInfo <- selectedQ[q,]
+  if (!is.na(qInfo["Type"]) && qInfo["Type"] == "ordinal") {
+    print(q)
+    ordinalAnswers <- vragenLong[,q]
+    recoded <- rep(NA_integer_, length(ordinalAnswers))
+    if (q == "ik.heb.vertrouwen.in.de.aanpak.van.de.corona.crisis.door.de.nederlandse.regering") {
+      recoded[ordinalAnswers %in% c(1:2)] <- 0
+      recoded[ordinalAnswers %in% c(3:5)] <- 1
+    } else if (q == "ik.maak.me.zorgen.om.zelf.ziek.te.worden...hoeveel.zorgen.maakte.u.zich.de.afgelopen.7.dagen.over.de.corona.crisis.") {
+      recoded[ordinalAnswers %in% c(1:2)] <- 0
+      recoded[ordinalAnswers %in% c(3:5)] <- 1
+    } else if (q == "ik.voel.me.verbonden.met.alle.nederlanders..in.de.afgelopen.7.dagen.") {
+      recoded[ordinalAnswers %in% c(1:3)] <- 0
+      recoded[ordinalAnswers %in% c(4:5)] <- 1
+    } else if (q == "ik.voel.me.niet.verplicht.om.de.corona.maatregelen.van.de.overheid.aan.te.houden..in.de.afgelopen.7.dagen.") {
+      recoded[ordinalAnswers %in% c(1:3)] <- 0
+      recoded[ordinalAnswers %in% c(4:5)] <- 1
+    } else if (q == "ik.heb.het.gevoel.dat.ik.niet.gewaardeerd.word.door.anderen.in.de.maatschappij..in.de.afgelopen.7.dagen.") {
+      recoded[ordinalAnswers %in% c(1:3)] <- 0
+      recoded[ordinalAnswers %in% c(4:5)] <- 1
+    }
+    print(table(recoded))
+    print(table(ordinalAnswers))
+    if (sum(table(recoded)) != sum(table(ordinalAnswers))) {
+      stop("Sum of answer frequencies not equal")
+    }
+    recodedQId <- paste0(q, "_binary")
+    vragenLong[,recodedQId] <- recoded
+    selectedQ[q, "Type"] <- "binomial"
+    selectedQ[q, "qId"] <- recodedQId
+    
+    qNameMap[selectedQ[qIndex,"Question"],2] <- recodedQId
+    
+    rownames(selectedQ)[qIndex] <- recodedQId
+  }
+}
 
 
 ## Run models
 
-qLoop <- as.list(selectedQ[,"Question"])
-names(qLoop) <- selectedQ[,"qId"]
+qLoop <- as.list(selectedQ[,"qId"])
+names(qLoop) <- selectedQ[,"Question"]
 
+table(selectedQ[,"Type"])
 
-
-q=qLoop[[2]]
+q=qLoop[[20]]
 q<-qNameMap["hoe waardeert u uw kwaliteit van leven over de afgelopen 7 dagen?",2]
 q<-qNameMap["Positive tested cumsum",2]
 q<-qNameMap["kon u zich bijna elke dag moeilijk concentreren of moeilijk beslissingen nemen? (in de afgelopen 7 dagen)",2]
 q<-qNameMap["everC19Pos",2]
 q<-qNameMap["BMI",2]
 q<-qNameMap["Mini combined, depressief score",2]
+q<-qNameMap["ik heb vertrouwen in de aanpak van de corona-crisis door de nederlandse regering",2]
 q<-qNameMap["hoeveel zorgen maakte u zich de afgelopen 7 dagen over de corona-crisis?",2]
-zScoreList <- lapply(qLoop, function(q){
-  zScores = tryCatch({
+zScoreList <- lapply(qLoop[20:21], function(q){
+  #zScores = tryCatch({
+    
+    print(q)
     
     qInfo <- selectedQ[q,]
     usedPrs <- colnames(prs)[-1]
@@ -384,12 +425,11 @@ zScoreList <- lapply(qLoop, function(q){
     fixedModel <- as.formula(fixedString)
     randomModel <- as.formula(paste0("~",randomString))
     fullModel <- as.formula(paste0(fixedString, "+ (", randomString, ")"))
-        
+    
     resultsPerArray <- lapply(arrayList, function(array){
       
       d <- vragenLong[!is.na(vragenLong[,q]) & vragenLong$array == array,c("PROJECT_PSEUDO_ID", q,usedPrs,"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days", "days2", "vl")]
       
-      table(d[,"vl"])
       coef <- 0
       
       if(qInfo["Type"] == "gaussian" & qInfo["Mixed"]){
@@ -401,9 +441,15 @@ zScoreList <- lapply(qLoop, function(q){
         stop("Not implement")
       } else if (qInfo["Type"] == "binomial" & qInfo["Mixed"]) {
         print("test3")
-        d[,q] <- d[,q] -1
+        if(max(d[,q])==2){
+          d[,q] <- d[,q] -1
+        }
+        if(sum(range(d[,q])==0:1)!=2){
+          stop("not binomal")
+        }
         glmMerFit <- glmer(fullModel, data = d, family = binomial, nAGQ=0 )
-        summary(glmMerFit)$coefficients
+        coef <- summary(glmMerFit)$coefficients
+        colnames(coef)[1:2]<-c("Value", "Std.Error")
       } else if (qInfo["Type"] == "binomial" & !qInfo["Mixed"]) {
         print("test4")
         d[,q] <- as.factor(d[,q])
@@ -420,23 +466,19 @@ zScoreList <- lapply(qLoop, function(q){
     
     metaRes <- inverseVarianceMeta(resultsPerArray, "Std.Error", "Value")
     return(as.matrix(metaRes)[,"z"])
-  }, error = function(e){print(q); return(NULL)})
-  return(zScores)
+  #}, error = function(e){print("error: ", q); return(NULL)})
+ # return(zScores)
 })
 
 
-
-
-
-
-
-cor.test(matrix())
 str(zScoreList)
 zScoreList2 <- zScoreList[!sapply(zScoreList, is.null)]
 
 # combine into z-score matrix excluding intercept
-zscores <- do.call("rbind", zScoreList2)
-zscores <- zscores[,colnames(zscores) != "(Intercept)"]
+zscores <- do.call("cbind", zScoreList2)
+#zscores <- zscores[,colnames(zscores) != "(Intercept)"]
+
+str(zscores)
 
 write.table(zscores, file = "zscoreMatrix.txt", sep = "\t", quote = F, col.names = NA)
 
@@ -1124,3 +1166,25 @@ dev.off()
 
 
 predict.coxph
+
+mean(pheno3[pheno3[,"array"] == "Gsa","age_recent"])
+mean(pheno3[pheno3[,"array"] == "Cyto","age_recent"])
+
+layout(matrix(1:2,nrow = 2))
+hist(pheno3[pheno3[,"array"] == "Gsa","age_recent"], breaks = 30)
+hist(pheno3[pheno3[,"array"] == "Cyto","age_recent"], breaks = 30)
+dev.off()
+
+
+
+
+
+table(pheno3[pheno3[,"array"] == "Gsa","gender_recent"])
+table(pheno3[pheno3[,"array"] == "Cyto","gender_recent"])
+
+table(pheno3[pheno3[,"array"] == "Gsa","household_recent"])
+table(pheno3[pheno3[,"array"] == "Cyto","household_recent"])
+
+
+table(pheno3[pheno3[,"array"] == "Gsa","have_childs_at_home_recent"])
+table(pheno3[pheno3[,"array"] == "Cyto","have_childs_at_home_recent"])
