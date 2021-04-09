@@ -45,19 +45,9 @@ spread_factor_columns <- function(df) {
 # Function to predict outcome values given a new dataset, 
 # named coefficient list (from a meta-analysis),
 # the model on which analysis is based
-predict_meta <- function(df, coefficients, formula, family) {
-  # Extract the terms from the base model
-  metaTerms <- terms(formula)
-  # Get the variables that must be present
-  variables <- unlist(as.list(attributes(metaTerms)$variables))
-  # Check if all these variables are present (excluding 'list' and the response variable)
-  if (!all(variables[3:length(variables)] %in% colnames(df))) {
-    stop("required variables are not present in the data")
-  }
-  # Get a subset of stuff
-  dfSubset <- df[,as.character(variables[3:length(variables)])]
+predict_meta <- function(df, coefficients, family) {
   # Spread all factor levels across columns for all columns that are factors.
-  dfSpread <- spread_factor_columns(dfSubset)
+  dfSpread <- spread_factor_columns(df)
   # Calculate the predicted values per term
   predictionPerTerm <- do.call("cbind", sapply(
     names(coefficients), 
@@ -109,14 +99,14 @@ inverseVarianceMeta <- function(resultsPerArray, seCol, valueCol){
 
 if(FALSE){
   #Run once to conver pheno data to RDS format
-  pheno <- read_delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/combined_questionnaires_v5_03-04-2021_genome_fitered/questionaire_df_subset_participants_with_genome_data_03-04-2021.txt", delim = "\t", quote = "", guess_max = 100000)
+  pheno <- read_delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/combined_questionnaires_v7_09-04-2021_genome_fitered/questionaire_df_subset_participants_with_genome_data_09-04-2021.txt", delim = "\t", quote = "", guess_max = 100000)
   dim(pheno)
   pheno2 <- as.data.frame(pheno)
   row.names(pheno2) <- pheno2[,1]
   
   colnames(pheno2)[1] <- "PROJECT_PSEUDO_ID"
   
-  saveRDS(pheno2, "/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/combined_questionnaires_v5_03-04-2021_genome_fitered/questionaire_df_subset_participants_with_genome_data_03-04-2021.rds")
+  saveRDS(pheno2, "/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/combined_questionnaires_v7_09-04-2021_genome_fitered/questionaire_df_subset_participants_with_genome_data_09-04-2021.rds")
   
 }
 
@@ -127,7 +117,7 @@ confounders <- c("gender_recent", "age_recent", "age2_recent", "chronic_recent",
 
 
 ##load pheno and prs
-pheno2 <- readRDS("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/combined_questionnaires_v5_03-04-2021_genome_fitered/questionaire_df_subset_participants_with_genome_data_03-04-2021.rds")
+pheno2 <- readRDS("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/combined_questionnaires_v7_09-04-2021_genome_fitered/questionaire_df_subset_participants_with_genome_data_09-04-2021.rds")
 
 sampleQc <- read.delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/inclusionPerVl.txt" , stringsAsFactors = F, row.names = 1)
 
@@ -315,16 +305,23 @@ row.names(gri) <- gri$Date
 vragenLong$GovernmentResponseIndex <- gri[as.character(vragenLong[,qNameMap["responsdatum covid-vragenlijst",2]]),"GovernmentResponseIndex"]
 
 
-#plot(gri$GovernmentResponseIndex, gri$StringencyIndex)
-#cor.test(gri$GovernmentResponseIndex, gri$StringencyIndex)
-#dev.off()
 ## Read selected questions
 
-selectedQ <- read.delim("selectedQs.txt", stringsAsFactors = F)
+selectedQ <- read.delim("selectedQs_20210408.txt", stringsAsFactors = F)
 selectedQ <- selectedQ[selectedQ[,"Question"] %in% qNameMap[,1],]
 selectedQ$qId <- qNameMap[selectedQ[,"Question"],2]
 rownames(selectedQ) <- selectedQ[,"qId"]
 
+
+## Add first / last day for selectedQ
+
+str(!is.na(vragenLong[,selectedQ[,"qId"][1]]))
+qRange <- t(sapply(selectedQ[,"qId"], function(x){
+  range(vragenLong[!is.na(vragenLong[,x]),"days"],na.rm = T)
+}))
+str(qRange)
+colnames(qRange) <- c("firstDay", "lastDay")
+selectedQ <- cbind(selectedQ, qRange)
 
 ## Correlate PRS
 library(heatmap3)
@@ -595,9 +592,6 @@ prsTrait = "BMI_gwas"
 
 plotThreshold = 3.18
 
-plotEffectsOverTime <- function(metaRes){
-  
-}
 
 
 str(resultList)
@@ -606,96 +600,118 @@ q <- "Positive.tested.cumsum"
 
 metaRes <- as.matrix(metaRes)
 
+qName <- names(resultList)[2]
 
-plotEffectsOverTime <- function(metaRes){
-metaResSelected <- metaRes[grepl(":days", row.names(metaRes)) & abs(metaRes[,"z"])>=plotThreshold,]
-if(nrow(metaResSelected)> 1){
-  
-  for(effect in rownames(metaResSelected)){
-   
-    effectName <- sub(":days", "", effect)
-    
-    if(effectName %in% colnames(prs)){
-      prsRange <- quantile(prs[,effectName],probs = seq(0,1,0.1))
-      
-      
-      dummy <- vragenLong[1:307,c(q,colnames(prs)[-1],"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days", "days2")]
-      dummy$days <- 1:307
-      dummy$days2 <- dummy$days * dummy$days
-      for(prsCol in colnames(prs)[-1]){
-        dummy[,prsCol] <- mean(prs[,prsCol])
-        #dummy[,prsCol] <- 0
-      }
-      dummy[,"age_recent"] <- mean(pheno3$age_recent)
-      #dummy[,"age_recent"] <- 0
-      dummy[,"age2_recent"] <- dummy[,"age_recent"] * dummy[,"age_recent"]
-      dummy[,"household_recent"] <- factor(levels(dummy[,"household_recent"])[1], levels = levels(dummy[,"household_recent"]))
-      dummy[,"have_childs_at_home_recent"] <- factor(levels(dummy[,"have_childs_at_home_recent"])[1], levels = levels(dummy[,"have_childs_at_home_recent"]))
-      dummy[,"gender_recent"] <- factor(levels(dummy[,"gender_recent"])[1], levels = levels(dummy[,"gender_recent"]))
-      dummy[,"chronic_recent"] <- factor(levels(dummy[,"chronic_recent"])[1], levels = levels(dummy[,"chronic_recent"]))
-      
-      coef=metaRes[,"y"]
-      
-      qInfo <- selectedQ[q,]
-      fam <- NA
-      
-      if(qInfo["Type"] == "gaussian"){
-        fam <- gaussian()
-      } else if (qInfo["Type"] == "binomial"){
-        fam <- binomial(link = "logit")
-      } else {
-        stop("error")
-      }
-      
-      
-      layout(matrix(1:2, nrow=1))
-      
-      dummy[,effectName] <- prsRange[10]
-      highPrs <- predict_meta(df = dummy, coefficients = coef, formula = fixedModel, family = fam)#, family = binomial(link = "logit")
-      dummy[,effectName] <- prsRange[6]
-      medianPrs <- predict_meta(df = dummy, coefficients = coef, formula = fixedModel, family = fam)#, family = binomial(link = "logit")
-      dummy[,effectName] <- prsRange[2]
-      lowPrs <- predict_meta(df = dummy, coefficients = coef, formula = fixedModel, family = fam)#, family = binomial(link = "logit")
-      
-      
-      
-     
-      plot.new()
-      plot.window(xlim = range(dummy$days), ylim = range(lowPrs, medianPrs, highPrs))
-      axis(side = 1)
-      axis(side = 2)
-      title(xlab = "days", ylab = q, main = paste0(effectName, " including days effect"))
-      points(lowPrs, col = "blue", type = "l")
-      points(medianPrs, col = "green", type = "l")
-      points(highPrs, col = "red", type = "l")
-      
-      
-      coef[grepl("days", names(coef)) & !grepl(effectName, names(coef))] <- 0
-      
-      dummy[,effectName] <- prsRange[10]
-      highPrs <- predict_meta(df = dummy, coefficients = coef, formula = fixedModel, family = fam)#, family = binomial(link = "logit")
-      dummy[,effectName] <- prsRange[6]
-      medianPrs <- predict_meta(df = dummy, coefficients = coef, formula = fixedModel, family = fam)#, family = binomial(link = "logit")
-      dummy[,effectName] <- prsRange[2]
-      lowPrs <- predict_meta(df = dummy, coefficients = coef, formula = fixedModel, family = fam)#, family = binomial(link = "logit")
-      
-      
-      plot.new()
-      plot.window(xlim = range(dummy$days), ylim = range(lowPrs, medianPrs, highPrs))
-      axis(side = 1)
-      axis(side = 2)
-      title(xlab = "days", ylab = q, main = paste0(effectName, " only"))
-      points(lowPrs, col = "blue", type = "l")
-      points(medianPrs, col = "green", type = "l")
-      points(highPrs, col = "red", type = "l")
-      
-      
-    }
-  }
-  
-  
-  
+pdf("interactionPlots.pdf", width = 14)
+for(qName in names(resultList)){
+  q<-qNameMap[qName,2]
+  plotEffectsOverTime(resultList[[qName]],q)
 }
+dev.off()
+
+qName <- "Positive tested cumsum"
+q<-qNameMap[qName,2]
+metaRes <- resultList[[qName]]
+effect <- "COVID.19.susceptibility:days"
+
+
+plotEffectsOverTime <- function(metaRes, q){
+  metaResSelected <- metaRes[grepl(":days", row.names(metaRes)) & abs(metaRes[,"z"])>=plotThreshold,,drop=F]
+  if(nrow(metaResSelected)> 1){
+    
+    for(effect in rownames(metaResSelected)){
+     
+      effectName <- sub(":days", "", effect)
+      
+      if(effectName %in% colnames(prs)){
+        prsRange <- quantile(prs[,effectName],probs = seq(0,1,0.1))
+        
+        
+        qInfo <- selectedQ[q,]
+        
+        qLable <- qInfo[,"English.label"]
+        
+        daysSeq <- qInfo[,"firstDay"]:qInfo[,"lastDay"]
+        
+        dummy <- vragenLong[daysSeq,c(q,colnames(prs)[-1],"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days", "days2")]
+        dummy$days <- daysSeq
+        dummy$days2 <- dummy$days * dummy$days
+        for(prsCol in colnames(prs)[-1]){
+          dummy[,prsCol] <- mean(prs[,prsCol])
+          #dummy[,prsCol] <- 0
+        }
+        dummy[,"age_recent"] <- mean(pheno3$age_recent)
+        #dummy[,"age_recent"] <- 0
+        dummy[,"age2_recent"] <- dummy[,"age_recent"] * dummy[,"age_recent"]
+        dummy[,"household_recent"] <- factor(levels(dummy[,"household_recent"])[1], levels = levels(dummy[,"household_recent"]))
+        dummy[,"have_childs_at_home_recent"] <- factor(levels(dummy[,"have_childs_at_home_recent"])[1], levels = levels(dummy[,"have_childs_at_home_recent"]))
+        dummy[,"gender_recent"] <- factor(levels(dummy[,"gender_recent"])[1], levels = levels(dummy[,"gender_recent"]))
+        dummy[,"chronic_recent"] <- factor(levels(dummy[,"chronic_recent"])[1], levels = levels(dummy[,"chronic_recent"]))
+        
+        coef=metaRes[,"y"]
+        
+        
+        fam <- NA
+        
+        if(qInfo["Type"] == "gaussian"){
+          fam <- gaussian()
+        } else if (qInfo["Type"] == "binomial"){
+          fam <- binomial(link = "logit")
+        } else {
+          stop("error")
+        }
+        
+      #  rpng(width = 1000, height = 800)
+        
+        layout(matrix(1:2, nrow=1))
+        
+        dummy[,effectName] <- prsRange[10]
+        highPrs <- predict_meta(df = dummy, coefficients = coef, family = fam)#, family = binomial(link = "logit")
+        dummy[,effectName] <- prsRange[6]
+        medianPrs <- predict_meta(df = dummy, coefficients = coef, family = fam)#, family = binomial(link = "logit")
+        dummy[,effectName] <- prsRange[2]
+        lowPrs <- predict_meta(df = dummy, coefficients = coef, family = fam)#, family = binomial(link = "logit")
+        
+        
+        
+       
+        plot.new()
+        plot.window(xlim = c(1,307), ylim = range(lowPrs, medianPrs, highPrs))
+        axis(side = 1)
+        axis(side = 2)
+        title(xlab = "days", ylab = qLable, main = paste0(effectName, " including days effect"))
+        points(lowPrs, col = "blue", type = "l")
+        points(medianPrs, col = "green", type = "l")
+        points(highPrs, col = "red", type = "l")
+        
+        
+        coef[grepl("days", names(coef)) & !grepl(effectName, names(coef))] <- 0
+        
+        dummy[,effectName] <- prsRange[10]
+        highPrs <- predict_meta(df = dummy, coefficients = coef, family = fam)#, family = binomial(link = "logit")
+        dummy[,effectName] <- prsRange[6]
+        medianPrs <- predict_meta(df = dummy, coefficients = coef, family = fam)#, family = binomial(link = "logit")
+        dummy[,effectName] <- prsRange[2]
+        lowPrs <- predict_meta(df = dummy, coefficients = coef, family = fam)#, family = binomial(link = "logit")
+        
+        
+        plot.new()
+        plot.window(xlim = c(1,307), ylim = range(lowPrs, medianPrs, highPrs))
+        axis(side = 1)
+        axis(side = 2)
+        title(xlab = "days", ylab = q, main = paste0(effectName, " only"))
+        points(lowPrs, col = "blue", type = "l")
+        points(medianPrs, col = "green", type = "l")
+        points(highPrs, col = "red", type = "l")
+        
+       # dev.off()
+        
+      }
+    }
+    
+    
+    
+  }
 
 }
 
