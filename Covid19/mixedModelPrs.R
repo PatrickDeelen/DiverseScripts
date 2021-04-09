@@ -602,6 +602,10 @@ metaRes <- as.matrix(metaRes)
 
 qName <- names(resultList)[2]
 
+
+prsLabels <- as.matrix(read.delim("prsLables.txt", stringsAsFactors = F, row.names = 1))[,1]
+
+
 pdf("interactionPlots.pdf", width = 14)
 for(qName in names(resultList)){
   q<-qNameMap[qName,2]
@@ -610,10 +614,12 @@ for(qName in names(resultList)){
 dev.off()
 
 qName <- "Positive tested cumsum"
+qName <- "hoe waardeert u uw kwaliteit van leven over de afgelopen 14 dagen?"
 q<-qNameMap[qName,2]
 metaRes <- resultList[[qName]]
 effect <- "COVID.19.susceptibility:days"
 
+cat(row.names(metaRes), sep = "\n")
 
 plotEffectsOverTime <- function(metaRes, q){
   metaResSelected <- metaRes[grepl(":days", row.names(metaRes)) & abs(metaRes[,"z"])>=plotThreshold,,drop=F]
@@ -626,6 +632,7 @@ plotEffectsOverTime <- function(metaRes, q){
       if(effectName %in% colnames(prs)){
         prsRange <- quantile(prs[,effectName],probs = seq(0,1,0.1))
         
+        prsLabel = prsLabels[effectName]
         
         qInfo <- selectedQ[q,]
         
@@ -648,9 +655,6 @@ plotEffectsOverTime <- function(metaRes, q){
         dummy[,"gender_recent"] <- factor(levels(dummy[,"gender_recent"])[1], levels = levels(dummy[,"gender_recent"]))
         dummy[,"chronic_recent"] <- factor(levels(dummy[,"chronic_recent"])[1], levels = levels(dummy[,"chronic_recent"]))
         
-        coef=metaRes[,"y"]
-        
-        
         fam <- NA
         
         if(qInfo["Type"] == "gaussian"){
@@ -660,10 +664,16 @@ plotEffectsOverTime <- function(metaRes, q){
         } else {
           stop("error")
         }
+
+        coef=metaRes[,"y"]
+                
+        #rpng(width = 1000, height = 800)
         
-      #  rpng(width = 1000, height = 800)
-        
-        layout(matrix(1:2, nrow=1))
+        layout(matrix(c(1,1,2,3,4,4), nrow=3, byrow = T), heights = c(0.1,0.8,0.1))
+        par(mar = c(0,0,0,0), xpd = NA)
+        plot.new()
+        plot.window(xlim = 0:1, ylim = 0:1)
+        text(0.5,0.5,paste0("Model fitted on '", qLable, "' stratified by '", prsLabel, "'"), cex = 2 , font = 2)
         
         dummy[,effectName] <- prsRange[10]
         highPrs <- predict_meta(df = dummy, coefficients = coef, family = fam)#, family = binomial(link = "logit")
@@ -672,20 +682,23 @@ plotEffectsOverTime <- function(metaRes, q){
         dummy[,effectName] <- prsRange[2]
         lowPrs <- predict_meta(df = dummy, coefficients = coef, family = fam)#, family = binomial(link = "logit")
         
+        colHigh = "firebrick2"
+        colMedium = "springgreen2"
+        colLow = "darkturquoise"
+        colAxis = "grey70"
         
-        
-       
+        par(mar = c(3,5,1,0), xpd = NA)
         plot.new()
         plot.window(xlim = c(1,307), ylim = range(lowPrs, medianPrs, highPrs))
-        axis(side = 1)
-        axis(side = 2)
-        title(xlab = "days", ylab = qLable, main = paste0(effectName, " including days effect"))
-        points(lowPrs, col = "blue", type = "l")
-        points(medianPrs, col = "green", type = "l")
-        points(highPrs, col = "red", type = "l")
+        axis(side = 1, col = colAxis)
+        axis(side = 2, col = colAxis)
+        title(xlab = "Days", ylab = qLable, main = "Full model")
+        points(daysSeq, lowPrs, col = colLow, type = "l", lwd = 2)
+        points(daysSeq, medianPrs, col = colMedium, type = "l", lwd = 2)
+        points(daysSeq, highPrs, col = colHigh, type = "l", lwd = 2)
         
         
-        coef[grepl("days", names(coef)) & !grepl(effectName, names(coef))] <- 0
+        coef[!grepl(effectName, names(coef))] <- 0
         
         dummy[,effectName] <- prsRange[10]
         highPrs <- predict_meta(df = dummy, coefficients = coef, family = fam)#, family = binomial(link = "logit")
@@ -694,17 +707,23 @@ plotEffectsOverTime <- function(metaRes, q){
         dummy[,effectName] <- prsRange[2]
         lowPrs <- predict_meta(df = dummy, coefficients = coef, family = fam)#, family = binomial(link = "logit")
         
-        
+        par(mar = c(3,5,1,0), xpd = NA)
         plot.new()
         plot.window(xlim = c(1,307), ylim = range(lowPrs, medianPrs, highPrs))
-        axis(side = 1)
-        axis(side = 2)
-        title(xlab = "days", ylab = q, main = paste0(effectName, " only"))
-        points(lowPrs, col = "blue", type = "l")
-        points(medianPrs, col = "green", type = "l")
-        points(highPrs, col = "red", type = "l")
+        axis(side = 1, col = colAxis)
+        axis(side = 2, col = colAxis)
+        title(xlab = "Days", ylab = qLable, main = paste0("Only '", prsLabel, "'"))
+        points(daysSeq, lowPrs, col = colLow, type = "l", lwd = 2)
+        points(daysSeq, medianPrs, col = colMedium, type = "l", lwd = 2)
+        points(daysSeq, highPrs, col = colHigh, type = "l", lwd = 2)
         
-       # dev.off()
+        par(mar = c(0,0,0,0), xpd = NA)
+        plot.new()
+        plot.window(xlim = 0:1, ylim = 0:1)
+        legend("center", fill = c(colLow, colMedium, colHigh), legend = paste0(c("Lowest 10% PGS of ", "Median PGS of ", "Highest 10% PGS of "), prsLabel), bty = "n")
+      
+        
+        #dev.off()
         
       }
     }
