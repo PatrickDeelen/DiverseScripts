@@ -411,13 +411,14 @@ resultList <- lapply(qLoop, function(q){
     #usedPrs <- "Cigarettes.per.day"
     #usedPrs <- "COVID.19.susceptibility"
     #usedPrs <- "Anxiety.tension"
+    usedPrs <- "COVID.19.severity"
     
     fixedString <- paste(q, "~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", paste0(usedPrs, collapse = " + ") ,")*days + days2  ) ")
     randomString <- "1|PROJECT_PSEUDO_ID"
     fixedModel <- as.formula(fixedString)
     randomModel <- as.formula(paste0("~",randomString))
     fullModel <- as.formula(paste0(fixedString, "+ (", randomString, ")"))
-    
+    q()
     resultsPerArray <- lapply(arrayList, function(array){
       
       d <- vragenLong[!is.na(vragenLong[,q]) & vragenLong$array == array,c("PROJECT_PSEUDO_ID", q,usedPrs,"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days", "days2", "vl")]
@@ -617,7 +618,7 @@ qName <- "Positive tested cumsum"
 qName <- "hoe waardeert u uw kwaliteit van leven over de afgelopen 14 dagen?"
 q<-qNameMap[qName,2]
 metaRes <- resultList[[qName]]
-effect <- "COVID.19.susceptibility:days"
+effect <- "Depression..broad.:days"
 
 cat(row.names(metaRes), sep = "\n")
 
@@ -630,6 +631,7 @@ plotEffectsOverTime <- function(metaRes, q){
       effectName <- sub(":days", "", effect)
       
       if(effectName %in% colnames(prs)){
+        
         prsRange <- quantile(prs[,effectName],probs = seq(0,1,0.1))
         
         prsLabel = prsLabels[effectName]
@@ -667,7 +669,7 @@ plotEffectsOverTime <- function(metaRes, q){
 
         coef=metaRes[,"y"]
                 
-        #rpng(width = 1000, height = 800)
+        rpng(width = 1000, height = 800)
         
         layout(matrix(c(1,1,2,3,4,4), nrow=3, byrow = T), heights = c(0.1,0.8,0.1))
         par(mar = c(0,0,0,0), xpd = NA)
@@ -723,7 +725,7 @@ plotEffectsOverTime <- function(metaRes, q){
         legend("center", fill = c(colLow, colMedium, colHigh), legend = paste0(c("Lowest 10% PGS of ", "Median PGS of ", "Highest 10% PGS of "), prsLabel), bty = "n")
       
         
-        #dev.off()
+        dev.off()
         
       }
     }
