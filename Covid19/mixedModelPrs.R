@@ -110,6 +110,7 @@ if(FALSE){
   
 }
 
+prsLabels <- as.matrix(read.delim("prsLables.txt", stringsAsFactors = F, row.names = 1))[,1]
 
 #Constants
 startdate <- as.Date("30/03/2020","%d/%m/%Y")
@@ -190,7 +191,7 @@ pheno3$naCOl <- NA
 
 
 ##Load and format questions meta data
-qOverview <- as.matrix(read.delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/pgs_correlations/quest_overview_nl_new_quest17_codes_updated_14-days.txt", stringsAsFactors = F, row.names = 1))
+qOverview <- as.matrix(read.delim("quest_overview_nl_new_quest17_codes_updated_14-days-include-complete-qof.txt", stringsAsFactors = F, row.names = 1))
 vls <- colnames(qOverview)[-c(20,21)]
 
 qOverview[2,]
@@ -249,26 +250,26 @@ names(qList) <- qNameMap[,2]
 
 ##Create ever covid pos variables
 
-testedPos <- qList[[qNameMap["hebt u een coronavirus/covid-19 infectie (gehad)?",2]]]
-everPosQNames <- paste0("everC19Pos",1:ncol(qOverview2))
-qList[["everC19Pos"]] <- everPosQNames
-qNameMap <- rbind(qNameMap, c("everC19Pos","everC19Pos"))
-rownames(qNameMap)[nrow(qNameMap)] <- "everC19Pos"
-everPos <- matrix(data = 0, nrow = nrow(pheno3), ncol = ncol(qOverview2) , dimnames = list(row.names = pheno3$PROJECT_PSEUDO_ID, col.names = everPosQNames) )
+#testedPos <- qList[[qNameMap["hebt u een coronavirus/covid-19 infectie (gehad)?",2]]]
+#everPosQNames <- paste0("everC19Pos",1:ncol(qOverview2))
+#qList[["everC19Pos"]] <- everPosQNames
+#qNameMap <- rbind(qNameMap, c("everC19Pos","everC19Pos"))
+#rownames(qNameMap)[nrow(qNameMap)] <- "everC19Pos"
+#everPos <- matrix(data = 0, nrow = nrow(pheno3), ncol = ncol(qOverview2) , dimnames = list(row.names = pheno3$PROJECT_PSEUDO_ID, col.names = everPosQNames) )
 
 #apply(everPos, 2, sum)
 
-everPos[!is.na(pheno3[,testedPos[1]]) & pheno3[,testedPos[1]] == 1, 1] <- 1
+#everPos[!is.na(pheno3[,testedPos[1]]) & pheno3[,testedPos[1]] == 1, 1] <- 1
 
-for(i in 2:ncol(qOverview2)){
-  everPos[(!is.na(pheno3[,testedPos[i]]) & pheno3[,testedPos[i]] == 1) | everPos[,i-1] == 1, i] <- 1
-}
+#for(i in 2:ncol(qOverview2)){
+  #everPos[(!is.na(pheno3[,testedPos[i]]) & pheno3[,testedPos[i]] == 1) | everPos[,i-1] == 1, i] <- 1
+#}
 
-if(any(colnames(everPos) %in% colnames(pheno3))){
-  stop("Duplicate col names")
-}
+#if(any(colnames(everPos) %in% colnames(pheno3))){
+  #stop("Duplicate col names")
+#}
 
-pheno3 <- merge(pheno3, everPos, by.x = "PROJECT_PSEUDO_ID", by.y = 0)
+#pheno3 <- merge(pheno3, everPos, by.x = "PROJECT_PSEUDO_ID", by.y = 0)
 
 ## Reshape to long format and clean some variables
 
@@ -299,10 +300,10 @@ dev.off()
 
 ## Add oxfor goverment repsonse index
 
-gri <- read.delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/jobs/OxCGRT/OxCGRT_Netherlands.txt", stringsAsFactors = F)
-row.names(gri) <- gri$Date
+#gri <- read.delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/jobs/OxCGRT/OxCGRT_Netherlands.txt", stringsAsFactors = F)
+#row.names(gri) <- gri$Date
 
-vragenLong$GovernmentResponseIndex <- gri[as.character(vragenLong[,qNameMap["responsdatum covid-vragenlijst",2]]),"GovernmentResponseIndex"]
+#vragenLong$GovernmentResponseIndex <- gri[as.character(vragenLong[,qNameMap["responsdatum covid-vragenlijst",2]]),"GovernmentResponseIndex"]
 
 
 ## Read selected questions
@@ -325,11 +326,16 @@ selectedQ <- cbind(selectedQ, qRange)
 
 ## Correlate PRS
 library(heatmap3)
-prsCor <- cor(prs[prs[,1] %in% pheno3[pheno3$array=="Gsa","PROJECT_PSEUDO_ID"],-1])
-#diag(prsCor) <- 0
-rpng(width = 1000, height = 1000)
-heatmap3(prsCor, balanceColor = T, margins = c(15,15), scale = "none")
+prsCor <- cor(prs[prs[,1] %in% pheno3[,"PROJECT_PSEUDO_ID"],-1])#pheno3$array=="Gsa"
+diag(prsCor) <- 0
+rownames(prsCor) <- prsLabels[rownames(prsCor)]
+colnames(prsCor) <- prsLabels[colnames(prsCor)]
+png("pgsCorrelation.png", width = 1000, height = 1000)
+heatmap3(prsCor, balanceColor = T, margins = c(21,21), scale = "none")
 dev.off()
+colnames(prs)
+str(cor.test(prs[prs[,1] %in% pheno3[,"PROJECT_PSEUDO_ID"],"Life.satisfaction"], prs[prs[,1] %in% pheno3[,"PROJECT_PSEUDO_ID"],"Neuroticism"]))
+str(cor.test(prs[prs[,1] %in% pheno3[,"PROJECT_PSEUDO_ID"],"Life.satisfaction"], prs[prs[,1] %in% pheno3[,"PROJECT_PSEUDO_ID"],"Depression..broad."]))
 
 ## Convert ordinal to binary
 for (qIndex in (1:nrow(selectedQ))) {
@@ -383,13 +389,14 @@ qLoop <- qLoop[!names(qLoop)=="hoeveel verschillende mensen, ouder dan 12 jaar, 
 qLoop <- qLoop[!names(qLoop)=="ik ben bereid de coronaregels te overtreden om kerst en/of oud en nieuw te kunnen vieren zoals ik gewend ben"]
 qLoop <- qLoop[!names(qLoop)=="ik vind het ongeacht de corona crisis fijn dat mensen meer onderlinge afstand houden."]
 
-table(vragenLong[,"everC19Pos"], useNA = "always")
+#table(vragenLong[,"everC19Pos"], useNA = "always")
 table(vragenLong[,"Positive.tested.cumsum" ], useNA = "always")
 
 table(selectedQ[,"Type"])
 
 q=qLoop[[4]]
 q<-qNameMap["hoe waardeert u uw kwaliteit van leven over de afgelopen 14 dagen?",2]
+q<-qNameMap["hoe waardeert u uw kwaliteit van leven over de afgelopen? (include 7 days)",2]
 q<-qNameMap["everC19Pos",2]
 q<-qNameMap["hoeveel zorgen maakte u zich de afgelopen 14 dagen over de corona-crisis?",2]
 q<-qNameMap["Positive tested cumsum",2]
@@ -405,20 +412,20 @@ resultList <- lapply(qLoop, function(q){
     qInfo <- selectedQ[q,]
     usedPrs <- colnames(prs)[-1]
     #usedPrs <- c("BMI_gwas", "Life.satisfaction", "Neuroticism")
-    #;usedPrs <- "Life.satisfaction"
+    usedPrs <- "Life.satisfaction"
     #usedPrs <- "Neuroticism"
     #usedPrs <- "BMI_gwas"
     #usedPrs <- "Cigarettes.per.day"
     #usedPrs <- "COVID.19.susceptibility"
     #usedPrs <- "Anxiety.tension"
-    usedPrs <- "COVID.19.severity"
+    #usedPrs <- "COVID.19.severity"
     
     fixedString <- paste(q, "~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", paste0(usedPrs, collapse = " + ") ,")*days + days2  ) ")
+    fixedString <- paste(q, "~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", paste0(usedPrs, collapse = " + ") ,") + days + days2  ) ")
     randomString <- "1|PROJECT_PSEUDO_ID"
     fixedModel <- as.formula(fixedString)
     randomModel <- as.formula(paste0("~",randomString))
     fullModel <- as.formula(paste0(fixedString, "+ (", randomString, ")"))
-    q()
     resultsPerArray <- lapply(arrayList, function(array){
       
       d <- vragenLong[!is.na(vragenLong[,q]) & vragenLong$array == array,c("PROJECT_PSEUDO_ID", q,usedPrs,"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days", "days2", "vl")]
@@ -457,7 +464,7 @@ resultList <- lapply(qLoop, function(q){
     #resultsPerArray[["Gsa"]]
     #resultsPerArray[["Cyto"]]
     
-    metaRes <- inverseVarianceMeta(resultsPerArray, "Std.Error", "Value")
+      metaRes <- inverseVarianceMeta(resultsPerArray, "Std.Error", "Value")
     
     return(as.matrix(metaRes))
   #}, error = function(e){print("error: ", q); return(NULL)})
@@ -467,14 +474,17 @@ resultList <- lapply(qLoop, function(q){
 str(resultList)
 
 zScoreList <- lapply(resultList, function(x){return(x[,"z"])})
+pvalueList <- lapply(resultList, function(x){return(x[,"p"])})
 
 # combine into z-score matrix excluding intercept
 zscores <- do.call("cbind", zScoreList)
+pvalues <- do.call("cbind", pvalueList)
 #zscores <- zscores[,colnames(zscores) != "(Intercept)"]
 
 str(zscores)
 
 write.table(zscores, file = "zscoreMatrix.txt", sep = "\t", quote = F, col.names = NA)
+write.table(pvalues, file = "pvaluesMatrix.txt", sep = "\t", quote = F, col.names = NA)
 
 
 #below is testingground
@@ -604,7 +614,7 @@ metaRes <- as.matrix(metaRes)
 qName <- names(resultList)[2]
 
 
-prsLabels <- as.matrix(read.delim("prsLables.txt", stringsAsFactors = F, row.names = 1))[,1]
+
 
 
 pdf("interactionPlots.pdf", width = 14)
