@@ -396,7 +396,7 @@ table(selectedQ[,"Type"])
 
 q=qLoop[[4]]
 q<-qNameMap["hoe waardeert u uw kwaliteit van leven over de afgelopen 14 dagen?",2]
-q<-qNameMap["hoe waardeert u uw kwaliteit van leven over de afgelopen? (include 7 days)",2]
+q<-qNameMap["hoe waardeert u uw kwaliteit van leven over de afgelopen 14 dagen? (include 7 days)",2]
 q<-qNameMap["everC19Pos",2]
 q<-qNameMap["hoeveel zorgen maakte u zich de afgelopen 14 dagen over de corona-crisis?",2]
 q<-qNameMap["Positive tested cumsum",2]
@@ -412,7 +412,7 @@ resultList <- lapply(qLoop, function(q){
     qInfo <- selectedQ[q,]
     usedPrs <- colnames(prs)[-1]
     #usedPrs <- c("BMI_gwas", "Life.satisfaction", "Neuroticism")
-    usedPrs <- "Life.satisfaction"
+    #usedPrs <- "Life.satisfaction"
     #usedPrs <- "Neuroticism"
     #usedPrs <- "BMI_gwas"
     #usedPrs <- "Cigarettes.per.day"
@@ -421,7 +421,6 @@ resultList <- lapply(qLoop, function(q){
     #usedPrs <- "COVID.19.severity"
     
     fixedString <- paste(q, "~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", paste0(usedPrs, collapse = " + ") ,")*days + days2  ) ")
-    fixedString <- paste(q, "~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", paste0(usedPrs, collapse = " + ") ,") + days + days2  ) ")
     randomString <- "1|PROJECT_PSEUDO_ID"
     fixedModel <- as.formula(fixedString)
     randomModel <- as.formula(paste0("~",randomString))
@@ -628,9 +627,8 @@ qName <- "Positive tested cumsum"
 qName <- "hoe waardeert u uw kwaliteit van leven over de afgelopen 14 dagen?"
 q<-qNameMap[qName,2]
 metaRes <- resultList[[qName]]
-effect <- "Depression..broad.:days"
-
-cat(row.names(metaRes), sep = "\n")
+effect <- "Life.satisfaction:days"
+metaRes<- as.matrix(metaRes)
 
 plotEffectsOverTime <- function(metaRes, q){
   metaResSelected <- metaRes[grepl(":days", row.names(metaRes)) & abs(metaRes[,"z"])>=plotThreshold,,drop=F]
