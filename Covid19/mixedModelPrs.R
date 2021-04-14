@@ -99,14 +99,14 @@ inverseVarianceMeta <- function(resultsPerArray, seCol, valueCol){
 
 if(FALSE){
   #Run once to conver pheno data to RDS format
-  pheno <- read_delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/combined_questionnaires_v7_09-04-2021_genome_fitered/questionaire_df_subset_participants_with_genome_data_09-04-2021.txt", delim = "\t", quote = "", guess_max = 100000)
+  pheno <- read_delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/combined_questionnaires_v8_14-04-2021_genome_fitered/questionaire_df_subset_participants_with_genome_data_14-04-2021.txt", delim = "\t", quote = "", guess_max = 100000)
   dim(pheno)
   pheno2 <- as.data.frame(pheno)
   row.names(pheno2) <- pheno2[,1]
   
   colnames(pheno2)[1] <- "PROJECT_PSEUDO_ID"
   
-  saveRDS(pheno2, "/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/combined_questionnaires_v7_09-04-2021_genome_fitered/questionaire_df_subset_participants_with_genome_data_09-04-2021.rds")
+  saveRDS(pheno2, "/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/combined_questionnaires_v8_14-04-2021_genome_fitered/questionaire_df_subset_participants_with_genome_data_14-04-2021.rds")
   
 }
 
@@ -118,7 +118,7 @@ confounders <- c("gender_recent", "age_recent", "age2_recent", "chronic_recent",
 
 
 ##load pheno and prs
-pheno2 <- readRDS("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/combined_questionnaires_v7_09-04-2021_genome_fitered/questionaire_df_subset_participants_with_genome_data_09-04-2021.rds")
+pheno2 <- readRDS("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/combined_questionnaires_v8_14-04-2021_genome_fitered/questionaire_df_subset_participants_with_genome_data_14-04-2021.rds")
 
 sampleQc <- read.delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/inclusionPerVl.txt" , stringsAsFactors = F, row.names = 1)
 
@@ -411,6 +411,7 @@ resultList <- lapply(qLoop, function(q){
     
     qInfo <- selectedQ[q,]
     usedPrs <- colnames(prs)[-1]
+    usedPrs <- usedPrs[!usedPrs %in% "Cigarettes.per.day"]
     #usedPrs <- c("BMI_gwas", "Life.satisfaction", "Neuroticism")
     #usedPrs <- "Life.satisfaction"
     #usedPrs <- "Neuroticism"
@@ -419,15 +420,17 @@ resultList <- lapply(qLoop, function(q){
     #usedPrs <- "COVID.19.susceptibility"
     #usedPrs <- "Anxiety.tension"
     #usedPrs <- "COVID.19.severity"
+    usedPrs <- "Worry.vulnerability"
     
-    fixedString <- paste(q, "~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", paste0(usedPrs, collapse = " + ") ,")*days + days2  ) ")
+    fixedString <- paste(q, "~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", paste0(usedPrs, collapse = " + ") ,")*days + days2 ) ")
     randomString <- "1|PROJECT_PSEUDO_ID"
     fixedModel <- as.formula(fixedString)
     randomModel <- as.formula(paste0("~",randomString))
     fullModel <- as.formula(paste0(fixedString, "+ (", randomString, ")"))
+    
     resultsPerArray <- lapply(arrayList, function(array){
       
-      d <- vragenLong[!is.na(vragenLong[,q]) & vragenLong$array == array,c("PROJECT_PSEUDO_ID", q,usedPrs,"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days", "days2", "vl")]
+      d <- vragenLong[!is.na(vragenLong[,q]) & vragenLong$array == array,c("PROJECT_PSEUDO_ID", q,usedPrs,"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days", "days2", "days3", "vl")]
       table(vragenLong[,q])
       coef <- 0
       
@@ -470,7 +473,17 @@ resultList <- lapply(qLoop, function(q){
  # return(zScores)
 })
 
-str(resultList)
+
+
+plot(ranef(res))
+dev.off()
+
+plot(res)
+dev.off()
+
+
+
+
 
 zScoreList <- lapply(resultList, function(x){return(x[,"z"])})
 pvalueList <- lapply(resultList, function(x){return(x[,"p"])})
@@ -1212,8 +1225,9 @@ covid19Events2 <- do.call("rbind", covid19Events)
 prsTrait = "COVID.19.susceptibility"
 prsTrait = "Anxiety.tension"
 prsRange <- quantile(prs[,prsTrait],probs = seq(0,1,0.1))
+prsRange <- quantile(prs[,prsTrait],probs = c(0,0.1,0.4,0.6,0.9,1))
 covid19Events2$prsQuantile <- cut(covid19Events2[,prsTrait],breaks = prsRange, include.lowest = T)
-table(covid19Events2$prsQuantile)
+length(table(covid19Events2$prsQuantile))
 q<-qNameMap["hebt u een coronavirus/covid-19 infectie (gehad)?",2]
 
 table(covid19Events2[,"eventDays"], useNA="always")
@@ -1225,8 +1239,17 @@ survModel <- as.formula(paste(" Surv(eventDays, ",q,") ~1"))
 km_fit <- survfit(survModel, data=covid19Events2)
 summary(km_fit, times = c(1,180,max(covid19Events2$eventDays)))          
 
+colHigh = "firebrick2"
+colMedium = "springgreen2"
+colLow = "darkturquoise"
+
+prsLabel = prsLabels[prsTrait]
+
 rpng(width = 800, height = 800)
-plot(km_fit, xlab="Days",conf.int = 0.95, main = 'C19 incidence', col = c("blue", rep("grey",8), "red"), lwd=2, mark.time=FALSE, ylim = c(0.8, 1)) 
+pdf("kmplot.pdf", useDingbats = F)
+par(xpd = NA)
+plot(km_fit, xlab="Days", main = 'C19 incidence', col = c(colLow, NA,colMedium,NA, colHigh), lwd=2, mark.time=FALSE, ylim = c(0.8, 1)) 
+legend("bottomleft", fill = c(colLow, colMedium, colHigh), legend = paste0(c("Lowest 10% PGS of ", "Median PGS of ", "Highest 10% PGS of "), prsLabel), bty = "n")
 dev.off()
 
 
