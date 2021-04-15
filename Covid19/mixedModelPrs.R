@@ -474,7 +474,6 @@ resultList <- lapply(qLoop, function(q){
 })
 
 
-
 plot(ranef(res))
 dev.off()
 
@@ -1381,3 +1380,12 @@ table(pheno3[pheno3[,"array"] == "Cyto","household_recent"])
 
 table(pheno3[pheno3[,"array"] == "Gsa","have_childs_at_home_recent"])
 table(pheno3[pheno3[,"array"] == "Cyto","have_childs_at_home_recent"])
+
+
+
+inclusionPerVl <- read.delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/inclusionPerVl.txt", row.names =1)
+inclusionPerVl <- inclusionPerVl[pheno3$PROJECT_PSEUDO_ID ,]
+pdf("completedQperPerson.pdf")
+par(xpd = NA)
+barplot(table(apply(inclusionPerVl,1,sum)), main = "Number of completed questionnaires per participant", xlab = "Completed questionnaires", ylab = "Number of particpants", las = 2)
+dev.off()

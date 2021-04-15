@@ -8,7 +8,10 @@ dim(pheno)
 pheno2 <- as.data.frame(pheno)
 row.names(pheno2) <- pheno2[,1]
 
-saveRDS(pheno2, "/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/questioniare_subset_participants_with_genome_data/questionaire_df_subset_participants_with_genome_data_01-03-2021.rds")
+#saveRDS(pheno2, "/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/questioniare_subset_participants_with_genome_data/questionaire_df_subset_participants_with_genome_data_01-03-2021.rds")
+
+pheno2 <- readRDS("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/questioniare_subset_participants_with_genome_data/questionaire_df_subset_participants_with_genome_data_01-03-2021.rds")
+dim(x)
 
 c("gender_recent", "age_recent", "age2_recent", "chronic_recent", "household_recent", "have_childs_at_home_recent") %in% colnames(pheno2)
 
@@ -121,7 +124,7 @@ median(qpp)
 
 inclusionPerVl <- missing[participatedBothHalf,] <= 5
 str(inclusionPerVl)
-write.table(inclusionPerVl, file = "/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/inclusionPerVl.txt", quote = F, sep = "\t", col.names = NA)
+#write.table(inclusionPerVl, file = "/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/inclusionPerVl.txt", quote = F, sep = "\t", col.names = NA)
 
 x <- apply(missing[names(qpp)[qpp==0],], 1, function(x){sum(x < 100)})
 table(x)
