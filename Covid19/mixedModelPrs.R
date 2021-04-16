@@ -297,6 +297,10 @@ vragenLong$chronic_recent <- factor(vragenLong$chronic_recent, levels = 0:1, lab
 hist(vragenLong$days, breaks = 330)
 dev.off()
 
+## Recode smoking
+table(vragenLong[,"hebt.u.de.afgelopen.14.dagen.gerookt."], useNA = "always")
+vragenLong[!is.na(vragenLong[,"hebt.u.de.afgelopen.14.dagen.gerookt."]) & vragenLong[,"hebt.u.de.afgelopen.14.dagen.gerookt."] == 2,"hebt.u.de.afgelopen.14.dagen.gerookt."] <- 0
+table(vragenLong[,"hebt.u.de.afgelopen.14.dagen.gerookt."], useNA = "always")
 
 ## Add oxfor goverment repsonse index
 
@@ -411,7 +415,7 @@ resultList <- lapply(qLoop, function(q){
     
     qInfo <- selectedQ[q,]
     usedPrs <- colnames(prs)[-1]
-    usedPrs <- usedPrs[!usedPrs %in% "Cigarettes.per.day"]
+   # usedPrs <- usedPrs[!usedPrs %in% "Cigarettes.per.day"]
     #usedPrs <- c("BMI_gwas", "Life.satisfaction", "Neuroticism")
     #usedPrs <- "Life.satisfaction"
     #usedPrs <- "Neuroticism"
@@ -420,7 +424,7 @@ resultList <- lapply(qLoop, function(q){
     #usedPrs <- "COVID.19.susceptibility"
     #usedPrs <- "Anxiety.tension"
     #usedPrs <- "COVID.19.severity"
-    usedPrs <- "Worry.vulnerability"
+    #usedPrs <- "Worry.vulnerability"
     
     fixedString <- paste(q, "~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", paste0(usedPrs, collapse = " + ") ,")*days + days2 ) ")
     randomString <- "1|PROJECT_PSEUDO_ID"
@@ -626,14 +630,16 @@ qName <- names(resultList)[2]
 
 
 
+endDate <- startdate + 307
 
+axisAt <- c(startdate,startdate+100,startdate+200, endDate)
 
-pdf("interactionPlots.pdf", width = 14)
-for(qName in names(resultList)){
-  q<-qNameMap[qName,2]
-  plotEffectsOverTime(resultList[[qName]],q)
-}
-dev.off()
+  pdf("interactionPlots.pdf", width = 10, height = 6)
+  for(qName in names(resultList)){
+    q<-qNameMap[qName,2]
+    plotEffectsOverTime(resultList[[qName]],q)
+  }
+  grDevices::dev.off()
 
 qName <- "Positive tested cumsum"
 qName <- "hoe waardeert u uw kwaliteit van leven over de afgelopen 14 dagen?"
@@ -662,6 +668,13 @@ plotEffectsOverTime <- function(metaRes, q){
         
         daysSeq <- qInfo[,"firstDay"]:qInfo[,"lastDay"]
         
+        colHigh = "#6300A7"
+        colMedium = "#D5546E"
+        colLow = "#FCD225"
+        colAxis = "grey70"
+        colMean = "#808080"
+        
+        
         dummy <- vragenLong[daysSeq,c(q,colnames(prs)[-1],"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days", "days2")]
         dummy$days <- daysSeq
         dummy$days2 <- dummy$days * dummy$days
@@ -689,7 +702,7 @@ plotEffectsOverTime <- function(metaRes, q){
 
         coef=metaRes[,"y"]
                 
-        rpng(width = 1000, height = 800)
+        #rpng(width = 1000, height = 800)
         
         layout(matrix(c(1,1,2,3,4,4), nrow=3, byrow = T), heights = c(0.1,0.8,0.1))
         par(mar = c(0,0,0,0), xpd = NA)
@@ -704,20 +717,17 @@ plotEffectsOverTime <- function(metaRes, q){
         dummy[,effectName] <- prsRange[2]
         lowPrs <- predict_meta(df = dummy, coefficients = coef, family = fam)#, family = binomial(link = "logit")
         
-        colHigh = "firebrick2"
-        colMedium = "springgreen2"
-        colLow = "darkturquoise"
-        colAxis = "grey70"
+
         
         par(mar = c(3,5,1,0), xpd = NA)
         plot.new()
-        plot.window(xlim = c(1,307), ylim = range(lowPrs, medianPrs, highPrs))
-        axis(side = 1, col = colAxis)
-        axis(side = 2, col = colAxis)
-        title(xlab = "Days", ylab = qLable, main = "Full model")
-        points(daysSeq, lowPrs, col = colLow, type = "l", lwd = 2)
-        points(daysSeq, medianPrs, col = colMedium, type = "l", lwd = 2)
-        points(daysSeq, highPrs, col = colHigh, type = "l", lwd = 2)
+        plot.window(xlim = c(startdate,endDate), ylim = range(lowPrs, medianPrs, highPrs))
+        axis(side = 1, at = axisAt, labels = format(axisAt, "%d-%b-%Y"), col = colAxis, col.axis = colMean)
+        axis(side = 2, col = colAxis, col.axis = colMean)
+        title(ylab = paste0("Predicted of ", qLable, "\n by full model"), col.lab = colMean)
+        points(startdate +daysSeq, lowPrs, col = colLow, type = "l", lwd = 2)
+        points(startdate +daysSeq, medianPrs, col = colMedium, type = "l", lwd = 2)
+        points(startdate +daysSeq, highPrs, col = colHigh, type = "l", lwd = 2)
         
         
         coef[!grepl(effectName, names(coef))] <- 0
@@ -731,21 +741,22 @@ plotEffectsOverTime <- function(metaRes, q){
         
         par(mar = c(3,5,1,0), xpd = NA)
         plot.new()
-        plot.window(xlim = c(1,307), ylim = range(lowPrs, medianPrs, highPrs))
-        axis(side = 1, col = colAxis)
-        axis(side = 2, col = colAxis)
-        title(xlab = "Days", ylab = qLable, main = paste0("Only '", prsLabel, "'"))
-        points(daysSeq, lowPrs, col = colLow, type = "l", lwd = 2)
-        points(daysSeq, medianPrs, col = colMedium, type = "l", lwd = 2)
-        points(daysSeq, highPrs, col = colHigh, type = "l", lwd = 2)
+        plot.window(xlim = c(startdate,endDate), ylim = range(lowPrs, medianPrs, highPrs))
+        axis(side = 1, at = axisAt, labels = format(axisAt, "%d-%b-%Y"), col = colAxis, col.axis = colMean)
+        axis(side = 2, col = colAxis, col.axis = colMean)
+        title(ylab = paste0("Contribution of ", prsLabel, " PGS\non ", qLable, " prediction"), col.lab = colMean)
+        points(startdate +daysSeq, lowPrs, col = colLow, type = "l", lwd = 2)
+        points(startdate +daysSeq, medianPrs, col = colMedium, type = "l", lwd = 2)
+        points(startdate +daysSeq, highPrs, col = colHigh, type = "l", lwd = 2)
+        
         
         par(mar = c(0,0,0,0), xpd = NA)
         plot.new()
         plot.window(xlim = 0:1, ylim = 0:1)
-        legend("center", fill = c(colLow, colMedium, colHigh), legend = paste0(c("Lowest 10% PGS of ", "Median PGS of ", "Highest 10% PGS of "), prsLabel), bty = "n")
+        legend("center", fill = c(colLow, colMedium, colHigh), legend = paste0(c("Lowest 10% PGS for ", "Median PGS for ", "Highest 10% PGS for "), prsLabel), bty = "n")
       
         
-        dev.off()
+        #dev.off()
         
       }
     }
@@ -1248,7 +1259,7 @@ rpng(width = 800, height = 800)
 pdf("kmplot.pdf", useDingbats = F)
 par(xpd = NA)
 plot(km_fit, xlab="Days", main = 'C19 incidence', col = c(colLow, NA,colMedium,NA, colHigh), lwd=2, mark.time=FALSE, ylim = c(0.8, 1)) 
-legend("bottomleft", fill = c(colLow, colMedium, colHigh), legend = paste0(c("Lowest 10% PGS of ", "Median PGS of ", "Highest 10% PGS of "), prsLabel), bty = "n")
+legend("bottomleft", fill = c(colLow, colMedium, colHigh), legend = paste0(c("Lowest 10% PGS for ", "Median PGS for ", "Highest 10% PGS for "), prsLabel), bty = "n")
 dev.off()
 
 
@@ -1389,3 +1400,5 @@ pdf("completedQperPerson.pdf")
 par(xpd = NA)
 barplot(table(apply(inclusionPerVl,1,sum)), main = "Number of completed questionnaires per participant", xlab = "Completed questionnaires", ylab = "Number of particpants", las = 2)
 dev.off()
+
+
