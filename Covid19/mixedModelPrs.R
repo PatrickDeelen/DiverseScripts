@@ -4,8 +4,7 @@ remoter::client("localhost", port = 55556, password = "laberkak")
 
 setwd("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/pgs_correlations/")
 
-#save.image(file = "workspacePatrick.RData")
-#load("workspacePatrick.RData")
+
 
 library("nlme")
 library(heatmap3)
@@ -15,6 +14,8 @@ library(readr)
 library(lme4)
 #library(meta)
 library(survival)
+
+
 
 
 #Functions:
@@ -94,307 +95,13 @@ inverseVarianceMeta <- function(resultsPerArray, seCol, valueCol){
 }
 
 
+validationSamples <- read.delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/validationSamples.txt", header = F)[,1]
 
+vragenLongTest <- vragenLong[ (vragenLong$PROJECT_PSEUDO_ID %in% validationSamples),]
+table(vragenLongTest$vl)
 
 
-if(FALSE){
-  #Run once to conver pheno data to RDS format
-  pheno <- read_delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/combined_questionnaires_v8_14-04-2021_genome_fitered/questionaire_df_subset_participants_with_genome_data_14-04-2021.txt", delim = "\t", quote = "", guess_max = 100000)
-  dim(pheno)
-  pheno2 <- as.data.frame(pheno)
-  row.names(pheno2) <- pheno2[,1]
-  
-  colnames(pheno2)[1] <- "PROJECT_PSEUDO_ID"
-  
-  saveRDS(pheno2, "/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/combined_questionnaires_v8_14-04-2021_genome_fitered/questionaire_df_subset_participants_with_genome_data_14-04-2021.rds")
-  
-}
 
-prsLabels <- as.matrix(read.delim("prsLables.txt", stringsAsFactors = F, row.names = 1))[,1]
-
-#Constants
-startdate <- as.Date("30/03/2020","%d/%m/%Y")
-confounders <- c("gender_recent", "age_recent", "age2_recent", "chronic_recent", "household_recent", "have_childs_at_home_recent")
-
-
-##load pheno and prs
-pheno2 <- readRDS("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/combined_questionnaires_v8_14-04-2021_genome_fitered/questionaire_df_subset_participants_with_genome_data_14-04-2021.rds")
-
-sampleQc <- read.delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/inclusionPerVl.txt" , stringsAsFactors = F, row.names = 1)
-
-pheno2 <- pheno2[pheno2$PROJECT_PSEUDO_ID %in% row.names(sampleQc),]
-dim(pheno2)
-
-if(!all(confounders %in% colnames(pheno2))){
-  stop("Not all confounders found")
-}
-
-prsGsa <- read.delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/input_PGS_data_ugli_v4/PGS_combined_ugli_07-04-2021.txt", stringsAsFactors = F)
-prsCyto <- read.delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/input_PGS_data_cyto_v4_duplicate_filtered/PGS_combined_cyto_duplicate_from_ugli_removed_07-04-2021.txt", stringsAsFactors = F)
-
-if(!all(colnames(prsGsa) == colnames(prsCyto))){
-  stop("Colnames must be equal")
-}
-if(!all(!row.names(prsGsa$PROJECT_PSEUDO_ID) %in% row.names(prsCyto$PROJECT_PSEUDO_ID))){
-  stop("Overlapping samples")
-}
-
-
-
-#Scale to zero per array
-prsGsa[,-1] <- scale(prsGsa[,-1])
-prsCyto[,-1] <- scale(prsCyto[,-1])
-
-
-prs <- rbind(prsGsa, prsCyto)
-
-selectedTraits <- read.delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/pgs_correlations/selectedTraits.txt", header = F, stringsAsFactors = F, comment.char = "#")[,1]
-if(!all(selectedTraits %in% colnames(prs))){
-  stop("Not all traits found")
-}
-prs <- prs[,c("PROJECT_PSEUDO_ID",selectedTraits)]
-colnames(prs)[colnames(prs) == "BMI"] <- "BMI_gwas"
-
-if(!all(pheno2$PROJECT_PSEUDO_ID %in% prs$PROJECT_PSEUDO_ID)){
-  stop("Not all pheno have genetics")#easly solved but code makes this assumtion
-}
-
-
-
-pheno2$array <- factor(as.numeric(pheno2$PROJECT_PSEUDO_ID %in% prsGsa$PROJECT_PSEUDO_ID), levels = 0:1, labels = c("Cyto", "Gsa"))
-
-arrayList <- as.list(levels(pheno2$array))
-names(arrayList) <- levels(pheno2$array)
-
-
-
-pheno3 <- merge(pheno2, prs, by = "PROJECT_PSEUDO_ID")
-
-# Exclude some black lised samples
-
-blackList <- read.delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/PROJECT_IDS_EARLIER_FILLED_IN.txt", row.names = NULL, sep = "")
-sum(pheno3$PROJECT_PSEUDO_ID %in% blackList[,1])
-pheno3 <- pheno3[!pheno3$PROJECT_PSEUDO_ID %in% blackList[,1],]
-
-
-#center age
-meanAge <- mean(pheno3[,"age_recent"])
-
-pheno3[,"age_recent"] <- pheno3[,"age_recent"] - meanAge
-pheno3[,"age2_recent"] <- pheno3[,"age_recent"] * pheno3[,"age_recent"]
-
-
-totalPart <- nrow(pheno3)
-
-#na col to use in reshapre for missing questions 
-pheno3$naCOl <- NA
-
-
-##Load and format questions meta data
-qOverview <- as.matrix(read.delim("quest_overview_nl_new_quest17_codes_updated_14-days-include-complete-qof.txt", stringsAsFactors = F, row.names = 1))
-vls <- colnames(qOverview)[-c(20,21)]
-
-qOverview[2,]
-
-qOverview[,-c(20,21)] <- apply(qOverview[,-c(20,21)], 1:2, function(x){
-  if(x==""){
-    return ("")
-  } else if(!x %in% colnames(pheno3)) {
-    return("")
-  } else if(grepl("responsedate_adu", x)){
-    #always include data question
-    return(x)
-  } else {
-    return(x)#no masking
-    # mask questions with >75% missing
-    #if(sum(is.na(pheno3[,x])) >= (totalPart/4)){
-    #  return (x)
-    #} else {
-      #return ("")
-    #}
-  }
-})
-
-# select questions with 4 repeats spread out over first and last half
-#qPassQc <- sapply(rownames(qOverview), function(q){
-  
-#  qsFirstHalf <- qOverview[q,c(1:12)]
-  #qsSecondHalf <- qOverview[q,c(13:19)]
-  #return(sum(qsFirstHalf!="") >= 2 && sum(qsSecondHalf!="") >= 2)
-  
-#})
-#table(qPassQc)
-
-qPassQc <- sapply(rownames(qOverview), function(q){sum(qOverview[q,1:19]!="")>=2})
-table(qPassQc)
-
-#qOverview2 <- qOverview[qPassQc,-c(20,21)]
-qOverview2 <- qOverview[,-c(20,21)]
-#head(qOverview2[,1])
-dim(qOverview2)
-
-
-qNameMap <- data.frame(orginal = row.names(qOverview2), new = make.names(row.names(qOverview2), unique = T), stringsAsFactors = F)
-row.names(qNameMap) <- row.names(qOverview2)
-
-qList <- lapply(qNameMap[,1], function(q){
-  qs <- qOverview2[q,]
-  qs[qs==""]="naCOl"
-  qs[!qs %in% colnames(pheno3)] <- "naCOl"
-  return(qs)
-})
-names(qList) <- qNameMap[,2]
-#qList[[qNameMap["responsdatum covid-vragenlijst",2]]]
-#qList[[qNameMap["als u moet kiezen, denkt u zelf dat u een coronavirus/covid-19 infectie hebt (gehad)?",2]]]
-
-
-##Create ever covid pos variables
-
-#testedPos <- qList[[qNameMap["hebt u een coronavirus/covid-19 infectie (gehad)?",2]]]
-#everPosQNames <- paste0("everC19Pos",1:ncol(qOverview2))
-#qList[["everC19Pos"]] <- everPosQNames
-#qNameMap <- rbind(qNameMap, c("everC19Pos","everC19Pos"))
-#rownames(qNameMap)[nrow(qNameMap)] <- "everC19Pos"
-#everPos <- matrix(data = 0, nrow = nrow(pheno3), ncol = ncol(qOverview2) , dimnames = list(row.names = pheno3$PROJECT_PSEUDO_ID, col.names = everPosQNames) )
-
-#apply(everPos, 2, sum)
-
-#everPos[!is.na(pheno3[,testedPos[1]]) & pheno3[,testedPos[1]] == 1, 1] <- 1
-
-#for(i in 2:ncol(qOverview2)){
-  #everPos[(!is.na(pheno3[,testedPos[i]]) & pheno3[,testedPos[i]] == 1) | everPos[,i-1] == 1, i] <- 1
-#}
-
-#if(any(colnames(everPos) %in% colnames(pheno3))){
-  #stop("Duplicate col names")
-#}
-
-#pheno3 <- merge(pheno3, everPos, by.x = "PROJECT_PSEUDO_ID", by.y = 0)
-
-## Reshape to long format and clean some variables
-
-if(any(names(qList) %in% colnames(pheno3))){
-  stop("Column name clash after reshape")
-}
-
-
-vragenLong <- reshape(pheno3, direction = "long", idvar = "PROJECT_PSEUDO_ID", varying = qList, v.names = names(qList), times = vls, timevar = "vl")
-vragenLong$vl2 <- as.numeric(factor(vragenLong$vl, levels = vls, ordered = T))
-vragenLong$vl3 <- factor(vragenLong$vl, levels = vls, ordered = F)
-vragenLong$days <- as.numeric(difftime(vragenLong[,qNameMap["responsdatum covid-vragenlijst",2]], startdate ,units="days"))
-vragenLong$days2 <- vragenLong$days*vragenLong$days
-vragenLong$days3 <- vragenLong$days*vragenLong$days*vragenLong$days
-vragenLong$days4 <- vragenLong$days*vragenLong$days*vragenLong$days*vragenLong$days
-#vragenLong$days5 <- vragenLong$days*vragenLong$days*vragenLong$days*vragenLong$days*vragenLong$days
-
-
-vragenLong$gender_recent <- factor(vragenLong$gender_recent, levels = 0:1, labels = c("female","male"))
-vragenLong$household_recent <- factor(vragenLong$household_recent, levels = 0:1, labels = c("single-person household","multi-person household"))
-vragenLong$have_childs_at_home_recent <- factor(vragenLong$have_childs_at_home_recent, levels = 0:1, labels = c("No childeren at home","Childeren at home"))
-vragenLong$chronic_recent <- factor(vragenLong$chronic_recent, levels = 0:1, labels = c("Healthy","Chronic disease"))
-
-
-hist(vragenLong$days, breaks = 330)
-dev.off()
-
-## Recode smoking
-table(vragenLong[,"hebt.u.de.afgelopen.14.dagen.gerookt."], useNA = "always")
-vragenLong[!is.na(vragenLong[,"hebt.u.de.afgelopen.14.dagen.gerookt."]) & vragenLong[,"hebt.u.de.afgelopen.14.dagen.gerookt."] == 2,"hebt.u.de.afgelopen.14.dagen.gerookt."] <- 0
-table(vragenLong[,"hebt.u.de.afgelopen.14.dagen.gerookt."], useNA = "always")
-
-## Add oxfor goverment repsonse index
-
-#gri <- read.delim("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/jobs/OxCGRT/OxCGRT_Netherlands.txt", stringsAsFactors = F)
-#row.names(gri) <- gri$Date
-
-#vragenLong$GovernmentResponseIndex <- gri[as.character(vragenLong[,qNameMap["responsdatum covid-vragenlijst",2]]),"GovernmentResponseIndex"]
-
-
-## Read selected questions
-
-selectedQ <- read.delim("selectedQs_20210408.txt", stringsAsFactors = F)
-selectedQ <- selectedQ[selectedQ[,"Question"] %in% qNameMap[,1],]
-selectedQ$qId <- qNameMap[selectedQ[,"Question"],2]
-rownames(selectedQ) <- selectedQ[,"qId"]
-
-
-## Add first / last day for selectedQ
-
-str(!is.na(vragenLong[,selectedQ[,"qId"][1]]))
-qRange <- t(sapply(selectedQ[,"qId"], function(x){
-  range(vragenLong[!is.na(vragenLong[,x]),"days"],na.rm = T)
-}))
-str(qRange)
-colnames(qRange) <- c("firstDay", "lastDay")
-selectedQ <- cbind(selectedQ, qRange)
-
-## Correlate PRS
-library(heatmap3)
-prsCor <- cor(prs[prs[,1] %in% pheno3[,"PROJECT_PSEUDO_ID"],-1])#pheno3$array=="Gsa"
-diag(prsCor) <- 0
-rownames(prsCor) <- prsLabels[rownames(prsCor)]
-colnames(prsCor) <- prsLabels[colnames(prsCor)]
-png("pgsCorrelation.png", width = 1000, height = 1000)
-heatmap3(prsCor, balanceColor = T, margins = c(21,21), scale = "none")
-dev.off()
-colnames(prs)
-str(cor.test(prs[prs[,1] %in% pheno3[,"PROJECT_PSEUDO_ID"],"Life.satisfaction"], prs[prs[,1] %in% pheno3[,"PROJECT_PSEUDO_ID"],"Neuroticism"]))
-str(cor.test(prs[prs[,1] %in% pheno3[,"PROJECT_PSEUDO_ID"],"Life.satisfaction"], prs[prs[,1] %in% pheno3[,"PROJECT_PSEUDO_ID"],"Depression..broad."]))
-
-## Convert ordinal to binary
-for (qIndex in (1:nrow(selectedQ))) {
-  q <- rownames(selectedQ)[qIndex]
-  qInfo <- selectedQ[q,]
-  if (!is.na(qInfo["Type"]) && qInfo["Type"] == "ordinal") {
-    print(q)
-    recodedQId <- paste0(q, "_binary")
-    ordinalAnswers <- vragenLong[,q]
-    recoded <- rep(NA_integer_, length(ordinalAnswers))
-    if (q == "ik.heb.vertrouwen.in.de.aanpak.van.de.corona.crisis.door.de.nederlandse.regering") {
-      recoded[ordinalAnswers %in% c(1:2)] <- 0
-      recoded[ordinalAnswers %in% c(3:5)] <- 1
-    } else if (q == "ik.maak.me.zorgen.om.zelf.ziek.te.worden...hoeveel.zorgen.maakte.u.zich.de.afgelopen.14.dagen.over.de.corona.crisis.") {
-      recoded[ordinalAnswers %in% c(1:2)] <- 0
-      recoded[ordinalAnswers %in% c(3:5)] <- 1
-    } else if (q == "ik.voel.me.verbonden.met.alle.nederlanders..in.de.afgelopen.7.dagen.") {
-      recoded[ordinalAnswers %in% c(1:3)] <- 0
-      recoded[ordinalAnswers %in% c(4:5)] <- 1
-    } else if (q == "ik.voel.me.niet.verplicht.om.de.corona.maatregelen.van.de.overheid.aan.te.houden..in.de.afgelopen.7.dagen.") {
-      recoded[ordinalAnswers %in% c(1:3)] <- 0
-      recoded[ordinalAnswers %in% c(4:5)] <- 1
-    } else if (q == "ik.heb.het.gevoel.dat.ik.niet.gewaardeerd.word.door.anderen.in.de.maatschappij..in.de.afgelopen.7.dagen.") {
-      recoded[ordinalAnswers %in% c(1:3)] <- 0
-      recoded[ordinalAnswers %in% c(4:5)] <- 1
-    } else if (q == "in.de.afgelopen.14.dagen..hoeveel.minuten.hebt.u.in.het.totaal..matig..intensief.bewogen..bijvoorbeeld.wandelen..fietsen..hardlopen..") {
-      recoded[ordinalAnswers %in% c(2:5)] <- 0
-      recoded[ordinalAnswers %in% c(1)] <- 1
-    } else if (q == "hoe.vaak.voelt.u.zich.alleen...in.de.afgelopen.14.dagen.") {
-      recoded[ordinalAnswers %in% c(1:2)] <- 0
-      recoded[ordinalAnswers %in% c(3)] <- 1
-    } else {
-      recoded <- ordinalAnswers
-    }
-    print(table(recoded))
-    print(table(ordinalAnswers))
-    if (sum(table(recoded)) != sum(table(ordinalAnswers))) {
-      stop("Sum of answer frequencies not equal")
-    }
-    vragenLong[,recodedQId] <- recoded
-    selectedQ[q, "Type"] <- "binomial"
-    selectedQ[q, "qId"] <- recodedQId
-    qNameMap[selectedQ[qIndex,"Question"],2] <- recodedQId
-    rownames(selectedQ)[qIndex] <- recodedQId
-  }
-}
-qLoop <- as.list(selectedQ[,"qId"])
-names(qLoop) <- selectedQ[,"Question"]
-
-qLoop <- qLoop[!names(qLoop)=="hoeveel verschillende mensen, ouder dan 12 jaar, buiten uw eigen huishouden, hebt u in totaal tijdens de kerstvakantie bezocht en/of als bezoek ontvangen?"]
-qLoop <- qLoop[!names(qLoop)=="ik ben bereid de coronaregels te overtreden om kerst en/of oud en nieuw te kunnen vieren zoals ik gewend ben"]
-qLoop <- qLoop[!names(qLoop)=="ik vind het ongeacht de corona crisis fijn dat mensen meer onderlinge afstand houden."]
-
-#table(vragenLong[,"everC19Pos"], useNA = "always")
-table(vragenLong[,"Positive.tested.cumsum" ], useNA = "always")
 
 table(selectedQ[,"Type"])
 
@@ -419,13 +126,13 @@ resultList <- lapply(qLoop, function(q){
     #usedPrs <- c("BMI_gwas", "Life.satisfaction", "Neuroticism")
     #usedPrs <- "Life.satisfaction"
     #usedPrs <- "Neuroticism"
-    #usedPrs <- "BMI_gwas"
+    usedPrs <- "BMI_gwas"
     #usedPrs <- "Cigarettes.per.day"
     #usedPrs <- "COVID.19.susceptibility"
     #usedPrs <- "Anxiety.tension"
     #usedPrs <- "COVID.19.severity"
     #usedPrs <- "Worry.vulnerability"
-    
+    #
     fixedString <- paste(q, "~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", paste0(usedPrs, collapse = " + ") ,")*days + days2 ) ")
     randomString <- "1|PROJECT_PSEUDO_ID"
     fixedModel <- as.formula(fixedString)
@@ -434,8 +141,9 @@ resultList <- lapply(qLoop, function(q){
     
     resultsPerArray <- lapply(arrayList, function(array){
       
-      d <- vragenLong[!is.na(vragenLong[,q]) & vragenLong$array == array,c("PROJECT_PSEUDO_ID", q,usedPrs,"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days", "days2", "days3", "vl")]
-      table(vragenLong[,q])
+      #& vragenLongValidation$gender_recent == "female" 
+      d <- vragenLongTest[!is.na(vragenLongTest[,q])  & vragenLongTest$array == array,c("PROJECT_PSEUDO_ID", q,usedPrs,"gender_recent","age_recent","age2_recent","household_recent","have_childs_at_home_recent","chronic_recent", "days", "days2", "days3", "vl")]
+      table(d[,q])
       coef <- 0
       
       if(qInfo["Type"] == "gaussian" & qInfo["Mixed"]){
@@ -471,12 +179,36 @@ resultList <- lapply(qLoop, function(q){
     #resultsPerArray[["Cyto"]]
     
       metaRes <- inverseVarianceMeta(resultsPerArray, "Std.Error", "Value")
-    
-    return(as.matrix(metaRes))
+      metaRes
+      return(as.matrix(metaRes))
   #}, error = function(e){print("error: ", q); return(NULL)})
  # return(zScores)
 })
 
+
+
+
+pheno3$test <- is.na(pheno3[,"covt17_responsedate_adu_q_1"])
+
+
+cor.test(pheno3$age_recent, pheno3$covt01_bmi)
+
+summary(glm(test~covt04_bmi+age_recent,family=binomial(link='logit'),data=pheno3))
+
+
+summary(glm(test~covt04_bmi+gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent ,family=binomial(link='logit'),data=pheno3))
+
+
+usedPrs <- colnames(prs)[-1]
+
+
+
+
+summary(glm(fixedModel <- as.formula(paste("test~covt04_bmi+covt11_qualityoflife_adu_q_2+gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", paste0(usedPrs, collapse = " + "))),family=binomial(link='logit'),data=pheno3))
+
+
+
+t.test(pheno3[x,"covt04_bmi"], pheno3[!x,"covt04_bmi"], na.action=na.omit)
 
 plot(ranef(res))
 dev.off()
@@ -648,6 +380,9 @@ metaRes <- resultList[[qName]]
 effect <- "Life.satisfaction:days"
 metaRes<- as.matrix(metaRes)
 
+metaRes <-  summary(res)$tTable
+colnames(metaRes)[1] <- "y"
+
 plotEffectsOverTime <- function(metaRes, q){
   metaResSelected <- metaRes[grepl(":days", row.names(metaRes)) & abs(metaRes[,"z"])>=plotThreshold,,drop=F]
   if(nrow(metaResSelected)> 1){
@@ -717,7 +452,13 @@ plotEffectsOverTime <- function(metaRes, q){
         dummy[,effectName] <- prsRange[2]
         lowPrs <- predict_meta(df = dummy, coefficients = coef, family = fam)#, family = binomial(link = "logit")
         
-
+        p <- predict(res, dummy, level = 0)
+        
+        library(ggeffects)
+        ggpredict(res, terms = "")
+        
+        #plot(lowPrs, p)
+        #dev.off()
         
         par(mar = c(3,5,1,0), xpd = NA)
         plot.new()
@@ -756,7 +497,7 @@ plotEffectsOverTime <- function(metaRes, q){
         legend("center", fill = c(colLow, colMedium, colHigh), legend = paste0(c("Lowest 10% PGS for ", "Median PGS for ", "Highest 10% PGS for "), prsLabel), bty = "n")
       
         
-        #dev.off()
+        dev.off()
         
       }
     }
