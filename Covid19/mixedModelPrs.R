@@ -126,14 +126,15 @@ resultList <- lapply(qLoop, function(q){
     #usedPrs <- c("BMI_gwas", "Life.satisfaction", "Neuroticism")
     #usedPrs <- "Life.satisfaction"
     #usedPrs <- "Neuroticism"
-    usedPrs <- "BMI_gwas"
+   #usedPrs <- "BMI_gwas"
     #usedPrs <- "Cigarettes.per.day"
     #usedPrs <- "COVID.19.susceptibility"
     #usedPrs <- "Anxiety.tension"
     #usedPrs <- "COVID.19.severity"
     #usedPrs <- "Worry.vulnerability"
     #
-    fixedString <- paste(q, "~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", paste0(usedPrs, collapse = " + ") ,")*days + days2 ) ")
+    
+    fixedString <- paste(q, "~((gender_recent+age_recent+age2_recent+household_recent+have_childs_at_home_recent+chronic_recent +", paste0(usedPrs, collapse = " + ") ,")*days + I(days^2) ) ")
     randomString <- "1|PROJECT_PSEUDO_ID"
     fixedModel <- as.formula(fixedString)
     randomModel <- as.formula(paste0("~",randomString))
@@ -185,13 +186,15 @@ resultList <- lapply(qLoop, function(q){
  # return(zScores)
 })
 
-
+glm
 
 
 pheno3$test <- is.na(pheno3[,"covt17_responsedate_adu_q_1"])
 
 
 cor.test(pheno3$age_recent, pheno3$covt01_bmi)
+
+summary(glm(test~covt04_bmi,family=binomial(link='logit'),data=pheno3))
 
 summary(glm(test~covt04_bmi+age_recent,family=binomial(link='logit'),data=pheno3))
 
@@ -441,6 +444,7 @@ plotEffectsOverTime <- function(metaRes, q){
         
         layout(matrix(c(1,1,2,3,4,4), nrow=3, byrow = T), heights = c(0.1,0.8,0.1))
         par(mar = c(0,0,0,0), xpd = NA)
+        
         plot.new()
         plot.window(xlim = 0:1, ylim = 0:1)
         text(0.5,0.5,paste0("Model fitted on '", qLable, "' stratified by '", prsLabel, "'"), cex = 2 , font = 2)
@@ -452,14 +456,36 @@ plotEffectsOverTime <- function(metaRes, q){
         dummy[,effectName] <- prsRange[2]
         lowPrs <- predict_meta(df = dummy, coefficients = coef, family = fam)#, family = binomial(link = "logit")
         
-        p <- predict(res, dummy, level = 0)
+        p <- predict(res, dummy, level = 0, interval = "confidence",)
+        str(p)
+        y <- prsRange[c(10,6,2)]
+        
+        summary(res)$tTable
+        
+        intervals(res)
+        
+        
+        qnorm(0.95)  * ( 2.280416e-02 + 1.530986e-04 + 4.249592e-07 + 4.717006e-05)
+        
+        resTest <- res
+        
+        str(resTest)
         
         library(ggeffects)
-        ggpredict(res, terms = "")
+        (x <- ggeffect(res, terms = c("days [daysSeq]", "Life.satisfaction [y]") , type = "fixed" ) )
+        plot(x)
+        dev.off()
         
+        gginteraction(res)
+        
+        ggeffect(res, type = "fixed")
+        
+        test <- predict(res, newdata = dummy, interval = "confidence", level = 0.95, levels=0)
+        str(test)
         #plot(lowPrs, p)
         #dev.off()
         
+        rpng()
         par(mar = c(3,5,1,0), xpd = NA)
         plot.new()
         plot.window(xlim = c(startdate,endDate), ylim = range(lowPrs, medianPrs, highPrs))
@@ -470,6 +496,11 @@ plotEffectsOverTime <- function(metaRes, q){
         points(startdate +daysSeq, medianPrs, col = colMedium, type = "l", lwd = 2)
         points(startdate +daysSeq, highPrs, col = colHigh, type = "l", lwd = 2)
         
+        c(startdate +daysSeq, rev(startdate +daysSeq))
+        
+        ciExtend <- 0.03
+        polygon(c(startdate +daysSeq, rev(startdate +daysSeq)), y = c(lowPrs + ciExtend, rev(lowPrs) - ciExtend))
+        dev.off()
         
         coef[!grepl(effectName, names(coef))] <- 0
         
