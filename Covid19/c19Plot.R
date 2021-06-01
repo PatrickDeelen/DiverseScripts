@@ -1,8 +1,11 @@
+workdir <- "/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/pgs_correlations/"
+phenoPath <- "/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/risky_behaviour/PRS_correlation/combined_questionnaires_v22_14-05-2021_genome_fitered_participants_filtered_correct_recoded/questionnaire_subset_participants_filtered_recoded_answers_longitudinal_filtered_15-05-2021"
+prsLabelFile <- "prsLables.txt"
+preparedDataFile <- "longitudinal.RData"
+intermediatesdir <-  "/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/pgs_correlations/longiIntermediates/"
 
-range(vragenLong[,"days"], na.rm=T)
-range(vragenLong[,qNameMap["responsdatum covid-vragenlijst",2]], na.rm=T)
-
-
+setwd(workdir)
+load(preparedDataFile)
 
 library(survival)
 #library("viridis")
@@ -13,11 +16,8 @@ library(survival)
 
 qName <- "Positive tested cumsum"
 q<-qNameMap[qName,2]
-metaRes <- resultList[[qName]]
-effect <- "COVID.19.susceptibility:days"
-metaRes<- as.matrix(metaRes)
 
-effectName <- sub(":days", "", effect)
+
 
 
 colHigh = "#6300A7"
@@ -26,23 +26,17 @@ colLow = "#FCD225"
 colAxis = "grey70"
 colMean = "#808080"
 
-prsRange <- quantile(prs[,effectName],probs = seq(0,1,0.1))
 
-prsLabel = prsLabels[effectName]
+startdate <- as.Date("30/03/2020","%d/%m/%Y")
+startday <- 0
+endday <- startday + 307
+axisAt <- c(startday,startday+100,startday+200, endday)
+
 
 qInfo <- selectedQ[q,]
 
-qLable <- qInfo[,"English.label"]
+qLable <- qInfo[,"label_en"]
 
-daysSeq <- qInfo[,"firstDay"]:qInfo[,"lastDay"]
-
-
-
-
-
-endDate <- startdate + 307
-
-axisAt <- c(startdate,startdate+100,startdate+200, endDate)
 
 
 

@@ -1,8 +1,12 @@
+#srun --cpus-per-task=10 --mem=100gb --nodes=1 --qos=priority --time=168:00:00 --pty bash -i
 #remoter::server(verbose = T, port = 55556, password = "laberkak", sync = T)
+#ssh -L 55556:gs-vcompute08:55556  gs-vcompute08
+
 
 remoter::client("localhost", port = 55556, password = "laberkak")
+Sys.info()
 
-setwd("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/pgs_correlations/")
+  setwd("/groups/umcg-lifelines/tmp01/projects/ov20_0554/analysis/pgs_correlations/")
 
 
 
