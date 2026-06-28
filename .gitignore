@@ -14,3 +14,9 @@ Thesis/.Rhistory
 *.class
 CompareGenotypeCalls/target/classes/nl/systemsgenetics/comparegenotypecalls/App_1.class
 /CompareGenotypeCalls/target
+CompareGenotypeCalls/target/classes/nl/systemsgenetics/comparegenotypecalls/App_1.class
+CompareGenotypeCalls/target/classes/verion.properties
+CompareGenotypeCalls/target/maven-archiver/pom.properties
+CompareGenotypeCalls/target/surefire-reports/nl.systemsgenetics.comparegenotypecalls.AppTest.txt
+CompareGenotypeCalls/target/surefire-reports/TEST-nl.systemsgenetics.comparegenotypecalls.AppTest.xml
+CompareGenotypeCalls/target/test-classes/nl/systemsgenetics/comparegenotypecalls/AppTest.class
