@@ -13,3 +13,4 @@ CompareGenotypeCalls/target/surefire-reports/nl.systemsgenetics.comparegenotypec
 Thesis/.Rhistory
 *.class
 CompareGenotypeCalls/target/classes/nl/systemsgenetics/comparegenotypecalls/App_1.class
+/CompareGenotypeCalls/target

@@ -252,14 +252,14 @@ public class App_1 {
 			snpIdFilter = new VariantIdIncludeFilter(snps);
 		}
 
-		RandomAccessGenotypeData data1 = RandomAccessGenotypeDataReaderFormats.valueOfSmart(data1Type.toUpperCase()).createFilteredGenotypeData(data1Path, 1024, snpIdFilter, data1SampleFilter, data1ForceChr, Double.parseDouble(data1ProbCall));
+			RandomAccessGenotypeData data1 = RandomAccessGenotypeDataReaderFormats.valueOfSmart(data1Type.toUpperCase()).createFilteredGenotypeData(new String[]{data1Path}, 1024, snpIdFilter, data1SampleFilter, data1ForceChr, Double.parseDouble(data1ProbCall));
 
 		VariantFilterSeqPos seqPosFilter = new VariantFilterSeqPos();
 		for (GeneticVariant data1Var : data1) {
 			seqPosFilter.addSeqPos(data1Var);
 		}
 
-		RandomAccessGenotypeData data2 = RandomAccessGenotypeDataReaderFormats.valueOfSmart(data2Type.toUpperCase()).createFilteredGenotypeData(data2Path, 1024, seqPosFilter, data2SampleFilter, data2ForceChr, Double.parseDouble(data2ProbCall));
+		RandomAccessGenotypeData data2 = RandomAccessGenotypeDataReaderFormats.valueOfSmart(data2Type.toUpperCase()).createFilteredGenotypeData(new String[]{data2Path}, 1024, seqPosFilter, data2SampleFilter, data2ForceChr, Double.parseDouble(data2ProbCall));
 
 		//Do here to optimize trityper 
 		data2 = new VariantFilterableGenotypeDataDecorator(data2, new VariantQcChecker(Float.valueOf(mafFilterData2), 0, 0));
